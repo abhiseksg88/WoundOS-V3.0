@@ -1,0 +1,223 @@
+import Foundation
+import WoundCore
+
+// MARK: - Snapshot Serializer
+
+/// Serializes a WoundScan into a multipart/form-data upload payload.
+/// Compresses depth map to float16, binary-encodes mesh data,
+/// and JSON-encodes metadata.
+public enum SnapshotSerializer {
+
+    /// Serialize a scan into multipart parts for upload.
+    public static func serialize(_ scan: WoundScan) throws -> [MultipartPart] {
+        var parts = [MultipartPart]()
+
+        // 1. RGB image (JPEG)
+        parts.append(MultipartPart(
+            name: "rgb_image",
+            filename: "\(scan.id.uuidString).jpg",
+            mimeType: "image/jpeg",
+            data: scan.captureData.rgbImageData
+        ))
+
+        // 2. Depth map (compressed float16)
+        let depthFloat16 = compressDepthToFloat16(scan.captureData.depthMapData)
+        parts.append(MultipartPart(
+            name: "depth_map",
+            filename: "depth.bin",
+            mimeType: "application/octet-stream",
+            data: depthFloat16
+        ))
+
+        // 3. Mesh data (binary: vertex count, vertices, face count, faces)
+        let meshData = packMeshBinary(
+            verticesData: scan.captureData.meshVerticesData,
+            facesData: scan.captureData.meshFacesData,
+            vertexCount: scan.captureData.vertexCount,
+            faceCount: scan.captureData.faceCount
+        )
+        parts.append(MultipartPart(
+            name: "mesh",
+            filename: "mesh.bin",
+            mimeType: "application/octet-stream",
+            data: meshData
+        ))
+
+        // 4. Metadata JSON
+        let metadata = ScanUploadMetadata(
+            scanId: scan.id.uuidString,
+            patientId: scan.patientId,
+            nurseId: scan.nurseId,
+            facilityId: scan.facilityId,
+            capturedAt: scan.capturedAt,
+            cameraIntrinsics: scan.captureData.cameraIntrinsics,
+            cameraTransform: scan.captureData.cameraTransform,
+            imageWidth: scan.captureData.imageWidth,
+            imageHeight: scan.captureData.imageHeight,
+            depthWidth: scan.captureData.depthWidth,
+            depthHeight: scan.captureData.depthHeight,
+            deviceModel: scan.captureData.deviceModel,
+            lidarAvailable: scan.captureData.lidarAvailable,
+            boundaryPoints2D: scan.nurseBoundary.points2D.map { [$0.x, $0.y] },
+            boundaryType: scan.nurseBoundary.boundaryType.rawValue,
+            tapPoint: scan.nurseBoundary.tapPoint.map { [$0.x, $0.y] },
+            primaryMeasurement: MeasurementPayload(
+                areaCm2: scan.primaryMeasurement.areaCm2,
+                maxDepthMm: scan.primaryMeasurement.maxDepthMm,
+                meanDepthMm: scan.primaryMeasurement.meanDepthMm,
+                volumeMl: scan.primaryMeasurement.volumeMl,
+                lengthMm: scan.primaryMeasurement.lengthMm,
+                widthMm: scan.primaryMeasurement.widthMm,
+                perimeterMm: scan.primaryMeasurement.perimeterMm,
+                processingTimeMs: scan.primaryMeasurement.processingTimeMs
+            ),
+            pushScore: PUSHPayload(
+                lengthTimesWidthCm2: scan.pushScore.lengthTimesWidthCm2,
+                exudateAmount: scan.pushScore.exudateAmount.rawValue,
+                tissueType: scan.pushScore.tissueType.rawValue,
+                totalScore: scan.pushScore.totalScore
+            )
+        )
+
+        let metadataJSON = try JSONEncoder.woundOS.encode(metadata)
+        parts.append(MultipartPart(
+            name: "metadata",
+            filename: "metadata.json",
+            mimeType: "application/json",
+            data: metadataJSON
+        ))
+
+        return parts
+    }
+
+    // MARK: - Float32 → Float16 Compression
+
+    /// Compress float32 depth data to float16 to halve upload size.
+    private static func compressDepthToFloat16(_ float32Data: Data) -> Data {
+        let float32Array = float32Data.withUnsafeBytes { buffer in
+            Array(buffer.bindMemory(to: Float32.self))
+        }
+
+        var float16Data = Data(capacity: float32Array.count * 2)
+
+        for value in float32Array {
+            var f16 = floatToFloat16(value)
+            withUnsafeBytes(of: &f16) { float16Data.append(contentsOf: $0) }
+        }
+
+        return float16Data
+    }
+
+    /// IEEE 754 float32 → float16 conversion.
+    private static func floatToFloat16(_ value: Float) -> UInt16 {
+        let bits = value.bitPattern
+        let sign = UInt16((bits >> 31) & 1)
+        let exponent = Int((bits >> 23) & 0xFF) - 127
+        let mantissa = bits & 0x7FFFFF
+
+        if exponent > 15 {
+            // Overflow → Infinity
+            return (sign << 15) | 0x7C00
+        } else if exponent < -14 {
+            // Underflow → 0
+            return sign << 15
+        } else {
+            let f16Exp = UInt16(exponent + 15)
+            let f16Man = UInt16(mantissa >> 13)
+            return (sign << 15) | (f16Exp << 10) | f16Man
+        }
+    }
+
+    // MARK: - Mesh Binary Packing
+
+    /// Pack mesh data into a binary format:
+    /// [vertexCount: UInt32][vertices: Float×3×N][faceCount: UInt32][faces: UInt32×3×M]
+    private static func packMeshBinary(
+        verticesData: Data,
+        facesData: Data,
+        vertexCount: Int,
+        faceCount: Int
+    ) -> Data {
+        var data = Data()
+
+        var vc = UInt32(vertexCount)
+        withUnsafeBytes(of: &vc) { data.append(contentsOf: $0) }
+        data.append(verticesData)
+
+        var fc = UInt32(faceCount)
+        withUnsafeBytes(of: &fc) { data.append(contentsOf: $0) }
+        data.append(facesData)
+
+        return data
+    }
+}
+
+// MARK: - Upload Metadata
+
+struct ScanUploadMetadata: Codable {
+    let scanId: String
+    let patientId: String
+    let nurseId: String
+    let facilityId: String
+    let capturedAt: Date
+    let cameraIntrinsics: [Float]
+    let cameraTransform: [Float]
+    let imageWidth: Int
+    let imageHeight: Int
+    let depthWidth: Int
+    let depthHeight: Int
+    let deviceModel: String
+    let lidarAvailable: Bool
+    let boundaryPoints2D: [[Float]]
+    let boundaryType: String
+    let tapPoint: [Float]?
+    let primaryMeasurement: MeasurementPayload
+    let pushScore: PUSHPayload
+}
+
+struct MeasurementPayload: Codable {
+    let areaCm2: Double
+    let maxDepthMm: Double
+    let meanDepthMm: Double
+    let volumeMl: Double
+    let lengthMm: Double
+    let widthMm: Double
+    let perimeterMm: Double
+    let processingTimeMs: Int
+}
+
+struct PUSHPayload: Codable {
+    let lengthTimesWidthCm2: Double
+    let exudateAmount: String
+    let tissueType: String
+    let totalScore: Int
+}
+
+// MARK: - Multipart Part
+
+public struct MultipartPart {
+    public let name: String
+    public let filename: String
+    public let mimeType: String
+    public let data: Data
+}
+
+// MARK: - JSON Encoder
+
+extension JSONEncoder {
+    static let woundOS: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        return encoder
+    }()
+}
+
+extension JSONDecoder {
+    static let woundOS: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }()
+}

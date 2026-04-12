@@ -1,0 +1,55 @@
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+build/
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+*.swp
+*~.nib
+
+# Python backend
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+.eggs/
+.venv/
+venv/
+*.egg
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+
+# Secrets
+*.p12
+*.cer
+*.mobileprovision
+credentials.json
+service-account.json
