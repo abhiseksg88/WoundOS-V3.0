@@ -4,8 +4,7 @@ import WoundCore
 
 // MARK: - Scan List View Controller
 
-/// Displays a list of all wound scans for a patient.
-/// Shows key measurements, upload status, and agreement badges.
+/// Apple Health-style list of wound scans with large title navigation.
 final class ScanListViewController: UIViewController {
 
     private let viewModel: ScanListViewModel
@@ -20,6 +19,10 @@ final class ScanListViewController: UIViewController {
         tv.dataSource = self
         tv.delegate = self
         tv.refreshControl = refreshControl
+        tv.backgroundColor = WOColors.screenBackground
+        tv.separatorInset = UIEdgeInsets(top: 0, left: 84, bottom: 0, right: 0)
+        tv.rowHeight = UITableView.automaticDimension
+        tv.estimatedRowHeight = 88
         return tv
     }()
 
@@ -29,16 +32,45 @@ final class ScanListViewController: UIViewController {
         return rc
     }()
 
-    private lazy var emptyLabel: UILabel = {
-        let label = UILabel()
-        label.translatesAutoresizingMaskIntoConstraints = false
-        label.text = "No scans yet.\nCapture your first wound scan."
-        label.font = .systemFont(ofSize: 16, weight: .regular)
-        label.textColor = .secondaryLabel
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        label.isHidden = true
-        return label
+    private lazy var emptyStateView: UIView = {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.isHidden = true
+
+        let icon = UIImageView(image: UIImage(systemName: "camera.viewfinder"))
+        icon.tintColor = WOColors.tertiaryText
+        icon.contentMode = .scaleAspectFit
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleLabel = UILabel()
+        titleLabel.text = "No Scans Yet"
+        titleLabel.font = WOFonts.title3
+        titleLabel.textColor = WOColors.secondaryText
+        titleLabel.textAlignment = .center
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "Capture your first wound scan\nusing the Capture tab."
+        subtitleLabel.font = WOFonts.subheadline
+        subtitleLabel.textColor = WOColors.tertiaryText
+        subtitleLabel.textAlignment = .center
+        subtitleLabel.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [icon, titleLabel, subtitleLabel])
+        stack.axis = .vertical
+        stack.spacing = WOSpacing.md
+        stack.alignment = .center
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 48),
+            icon.heightAnchor.constraint(equalToConstant: 48),
+            stack.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: -40),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: WOSpacing.xxxl),
+        ])
+
+        return container
     }()
 
     // MARK: - Init
@@ -68,9 +100,12 @@ final class ScanListViewController: UIViewController {
     // MARK: - UI Setup
 
     private func setupUI() {
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = WOColors.screenBackground
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.largeTitleDisplayMode = .always
+
         view.addSubview(tableView)
-        view.addSubview(emptyLabel)
+        view.addSubview(emptyStateView)
 
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -78,8 +113,10 @@ final class ScanListViewController: UIViewController {
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            emptyStateView.topAnchor.constraint(equalTo: view.topAnchor),
+            emptyStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            emptyStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            emptyStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
     }
 
@@ -90,7 +127,7 @@ final class ScanListViewController: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] scans in
                 self?.tableView.reloadData()
-                self?.emptyLabel.isHidden = !scans.isEmpty
+                self?.emptyStateView.isHidden = !scans.isEmpty
                 self?.refreshControl.endRefreshing()
             }
             .store(in: &cancellables)
@@ -133,9 +170,5 @@ extension ScanListViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         viewModel.selectScan(viewModel.scans[indexPath.row])
-    }
-
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        88
     }
 }

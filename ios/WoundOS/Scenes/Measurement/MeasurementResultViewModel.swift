@@ -23,49 +23,82 @@ final class MeasurementResultViewModel: ObservableObject {
     private let storage: StorageProviderProtocol
     private let uploadManager: UploadManager
 
-    // MARK: - Formatted Values
+    // MARK: - Wound Image
 
-    var areaCm2: String {
-        String(format: "%.1f cm²", scan.primaryMeasurement.areaCm2)
+    var woundImage: UIImage? {
+        UIImage(data: scan.captureData.rgbImageData)
     }
 
-    var maxDepthMm: String {
-        String(format: "%.1f mm", scan.primaryMeasurement.maxDepthMm)
+    /// Boundary points for the overlay (normalized 0...1 → CGPoint)
+    var boundaryPointsCG: [CGPoint] {
+        scan.nurseBoundary.points2D.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
     }
 
-    var meanDepthMm: String {
-        String(format: "%.1f mm", scan.primaryMeasurement.meanDepthMm)
+    // MARK: - Formatted Values (matching screenshot style: value + unit separate)
+
+    var areaValue: String {
+        String(format: "%.2f", scan.primaryMeasurement.areaCm2)
     }
 
-    var volumeMl: String {
-        String(format: "%.2f mL", scan.primaryMeasurement.volumeMl)
+    var areaUnit: String { "cm²" }
+
+    var perimeterValue: String {
+        String(format: "%.2f", scan.primaryMeasurement.perimeterMm / 10.0) // mm → cm
     }
 
-    var lengthMm: String {
-        String(format: "%.1f mm", scan.primaryMeasurement.lengthMm)
+    var perimeterUnit: String { "cm" }
+
+    var lengthValue: String {
+        String(format: "%.2f", scan.primaryMeasurement.lengthMm / 10.0)
     }
 
-    var widthMm: String {
-        String(format: "%.1f mm", scan.primaryMeasurement.widthMm)
+    var lengthUnit: String { "cm" }
+
+    var widthValue: String {
+        String(format: "%.2f", scan.primaryMeasurement.widthMm / 10.0)
     }
 
-    var perimeterMm: String {
-        String(format: "%.1f mm", scan.primaryMeasurement.perimeterMm)
+    var widthUnit: String { "cm" }
+
+    var maxDepthValue: String {
+        String(format: "%.1f", scan.primaryMeasurement.maxDepthMm)
     }
 
-    var pushTotalScore: String {
-        "\(scan.pushScore.totalScore) / 17"
+    var maxDepthUnit: String { "mm" }
+
+    var meanDepthValue: String {
+        String(format: "%.1f", scan.primaryMeasurement.meanDepthMm)
+    }
+
+    var meanDepthUnit: String { "mm" }
+
+    var volumeValue: String {
+        String(format: "%.2f", scan.primaryMeasurement.volumeMl)
+    }
+
+    var volumeUnit: String { "mL" }
+
+    var pushTotalScore: Int {
+        scan.pushScore.totalScore
     }
 
     var pushBreakdown: String {
         let lw = scan.pushScore.lengthTimesWidthSubScore
         let ex = scan.pushScore.exudateAmount.subScore
         let tt = scan.pushScore.tissueType.subScore
-        return "L×W: \(lw) + Exudate: \(ex) + Tissue: \(tt)"
+        return "L×W: \(lw)  Exudate: \(ex)  Tissue: \(tt)"
     }
 
     var processingTime: String {
         "\(scan.primaryMeasurement.processingTimeMs) ms"
+    }
+
+    var exudateDisplay: String {
+        scan.pushScore.exudateAmount.displayName
+    }
+
+    var tissueTypeDisplay: String {
+        scan.pushScore.tissueType.displayName
     }
 
     // MARK: - Init
@@ -78,19 +111,14 @@ final class MeasurementResultViewModel: ObservableObject {
 
     // MARK: - Save & Upload
 
-    /// Save locally and enqueue for background upload.
     func saveAndUpload() {
         isSaving = true
 
         Task { @MainActor in
             do {
-                // Save to local storage
                 try await storage.saveScan(scan)
-
-                // Enqueue for background upload
                 isUploading = true
                 await uploadManager.enqueueUpload(scan: scan)
-
                 isSaving = false
                 isUploading = false
                 onSaveComplete?()
@@ -101,7 +129,6 @@ final class MeasurementResultViewModel: ObservableObject {
         }
     }
 
-    /// Save locally only (offline mode).
     func saveLocally() {
         isSaving = true
 

@@ -34,8 +34,8 @@ public final class BoundaryCanvasView: UIView {
 
     public weak var delegate: BoundaryCanvasDelegate?
     public var drawingMode: DrawingMode = .tapPoint
-    public var strokeColor: UIColor = UIColor.systemBlue.withAlphaComponent(0.8)
-    public var fillColor: UIColor = UIColor.systemBlue.withAlphaComponent(0.15)
+    public var strokeColor: UIColor = UIColor(red: 0.0, green: 0.90, blue: 0.30, alpha: 0.9)
+    public var fillColor: UIColor = UIColor(red: 0.0, green: 0.90, blue: 0.30, alpha: 0.12)
     public var vertexColor: UIColor = .white
     public var strokeWidth: CGFloat = 2.5
     public var vertexRadius: CGFloat = 6.0

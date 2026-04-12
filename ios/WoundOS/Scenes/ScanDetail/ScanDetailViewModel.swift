@@ -29,8 +29,15 @@ final class ScanDetailViewModel: ObservableObject {
 
     // MARK: - PUSH Score
 
-    var pushScore: String {
-        "\(scan.pushScore.totalScore) / 17"
+    var pushScoreValue: Int {
+        scan.pushScore.totalScore
+    }
+
+    var pushBreakdown: String {
+        let lw = scan.pushScore.lengthTimesWidthSubScore
+        let ex = scan.pushScore.exudateAmount.subScore
+        let tt = scan.pushScore.tissueType.subScore
+        return "L×W: \(lw)  Exudate: \(ex)  Tissue: \(tt)"
     }
 
     var pushDetails: [(label: String, value: String)] {
