@@ -26,6 +26,9 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
     let snapshot: CaptureSnapshot
     private let measurementEngine: MeshMeasurementEngine
+    /// Pre-stamped quality score from the live capture moment.
+    /// Includes mesh hit rate / confidence after measurement runs.
+    private let qualityScoreSnapshot: CaptureQualityScore?
     private var normalizedTapPoint: SIMD2<Float>?
     private var normalizedBoundaryPoints: [SIMD2<Float>] = []
 
@@ -47,9 +50,14 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
     // MARK: - Init
 
-    init(snapshot: CaptureSnapshot, measurementEngine: MeshMeasurementEngine) {
+    init(
+        snapshot: CaptureSnapshot,
+        measurementEngine: MeshMeasurementEngine,
+        qualityScoreSnapshot: CaptureQualityScore? = nil
+    ) {
         self.snapshot = snapshot
         self.measurementEngine = measurementEngine
+        self.qualityScoreSnapshot = qualityScoreSnapshot
     }
 
     // MARK: - Tap Point
@@ -122,8 +130,8 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 // 1. Build CaptureData from snapshot
                 let captureData = buildCaptureData()
 
-                // 2. Project 2D boundary onto 3D mesh
-                let projectedPoints = try BoundaryProjector.project(
+                // 2. Project 2D boundary onto 3D mesh (with confidence filtering)
+                let projection = try BoundaryProjector.project(
                     points2D: normalizedBoundaryPoints,
                     imageWidth: snapshot.imageWidth,
                     imageHeight: snapshot.imageHeight,
@@ -133,7 +141,8 @@ final class BoundaryDrawingViewModel: ObservableObject {
                     faces: snapshot.faces,
                     depthMap: snapshot.depthMap,
                     depthWidth: snapshot.depthWidth,
-                    depthHeight: snapshot.depthHeight
+                    depthHeight: snapshot.depthHeight,
+                    confidenceMap: snapshot.confidenceMap
                 )
 
                 // 3. Build boundary model
@@ -141,16 +150,34 @@ final class BoundaryDrawingViewModel: ObservableObject {
                     boundaryType: drawingMode == .freeform ? .freeform : .polygon,
                     source: .nurseDrawn,
                     points2D: normalizedBoundaryPoints,
-                    projectedPoints3D: projectedPoints,
+                    projectedPoints3D: projection.projectedPoints3D,
                     tapPoint: normalizedTapPoint
                 )
 
-                // 4. Run measurement engine
-                let measurement = try measurementEngine.computeMeasurements(
+                // Combine pre-capture quality with post-projection stats
+                let combinedQuality: CaptureQualityScore? = qualityScoreSnapshot.map { pre in
+                    CaptureQualityScore(
+                        trackingStableSeconds: pre.trackingStableSeconds,
+                        captureDistanceM: pre.captureDistanceM,
+                        meshVertexCount: pre.meshVertexCount,
+                        meanDepthConfidence: projection.meanDepthConfidence,
+                        meshHitRate: projection.meshHitRate,
+                        angularVelocityRadPerSec: pre.angularVelocityRadPerSec
+                    )
+                } ?? CaptureQualityScore(
+                    trackingStableSeconds: 0,
+                    captureDistanceM: 0,
+                    meshVertexCount: snapshot.vertices.count,
+                    meanDepthConfidence: projection.meanDepthConfidence,
+                    meshHitRate: projection.meshHitRate,
+                    angularVelocityRadPerSec: 0
+                )
+
+                // 4. Run measurement engine — passes camera params + quality
+                let measurement = try measurementEngine.measure(
+                    captureData: captureData,
                     boundary: boundary,
-                    vertices: snapshot.vertices,
-                    faces: snapshot.faces,
-                    normals: snapshot.normals
+                    qualityScore: combinedQuality
                 )
 
                 // 5. Compute PUSH score

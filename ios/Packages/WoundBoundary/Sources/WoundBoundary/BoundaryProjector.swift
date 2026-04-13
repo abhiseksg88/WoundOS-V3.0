@@ -2,29 +2,36 @@ import Foundation
 import simd
 import WoundCore
 
+// MARK: - Projection Result
+
+/// Output of the boundary projector. Includes both the projected 3D
+/// points and quality statistics (mesh hit rate + mean confidence)
+/// that get folded into CaptureQualityScore.
+public struct BoundaryProjectionResult {
+    /// 3D world-space points, same count and order as input 2D points
+    public let projectedPoints3D: [SIMD3<Float>]
+    /// Fraction of points (0...1) that hit the mesh directly via ray-mesh
+    /// intersection rather than depth-map fallback. 1.0 = all hits.
+    public let meshHitRate: Double
+    /// Mean LiDAR confidence (0...2) sampled at boundary points.
+    /// Only counts samples that fell back to depth-map (mesh hits don't
+    /// have a per-pixel confidence score).
+    public let meanDepthConfidence: Double
+}
+
 // MARK: - Boundary Projector
 
 /// Projects 2D image-space boundary points onto the 3D mesh surface.
-/// Uses ray casting from the camera through each 2D point, with
-/// the frozen ARKit mesh as the intersection target.
-/// Falls back to depth-map lookup if ray-mesh intersection fails.
+/// Uses Möller-Trumbore ray-mesh intersection as the primary path
+/// (highest accuracy, leverages ARKit's reconstructed mesh).
+/// Falls back to depth-map sampling — but only on high-confidence pixels.
 public final class BoundaryProjector {
 
-    // MARK: - Public API
+    /// LiDAR confidence levels (per Apple): 0=low, 1=medium, 2=high.
+    /// We only accept high.
+    public static let minConfidence: UInt8 = 2
 
-    /// Project normalized 2D boundary points onto the 3D mesh.
-    /// - Parameters:
-    ///   - points2D: Boundary points in normalized image coordinates (0...1)
-    ///   - imageWidth: Width of the captured image in pixels
-    ///   - imageHeight: Height of the captured image in pixels
-    ///   - intrinsics: 3×3 camera intrinsics matrix
-    ///   - cameraTransform: 4×4 camera-to-world transform
-    ///   - vertices: Mesh vertices in world space
-    ///   - faces: Mesh triangle indices
-    ///   - depthMap: Fallback depth values (row-major, meters)
-    ///   - depthWidth: Depth map width
-    ///   - depthHeight: Depth map height
-    /// - Returns: Array of 3D world-space points, same count as input
+    /// Project boundary points and report quality statistics.
     public static func project(
         points2D: [SIMD2<Float>],
         imageWidth: Int,
@@ -35,8 +42,9 @@ public final class BoundaryProjector {
         faces: [SIMD3<UInt32>],
         depthMap: [Float],
         depthWidth: Int,
-        depthHeight: Int
-    ) throws -> [SIMD3<Float>] {
+        depthHeight: Int,
+        confidenceMap: [UInt8]
+    ) throws -> BoundaryProjectionResult {
 
         guard !points2D.isEmpty else {
             throw MeasurementError.insufficientBoundaryPoints(count: 0, minimum: 3)
@@ -48,17 +56,21 @@ public final class BoundaryProjector {
         var projected = [SIMD3<Float>]()
         projected.reserveCapacity(points2D.count)
 
+        var meshHits = 0
+        var confidenceSum = 0.0
+        var confidenceSamples = 0
+
         for point in points2D {
-            // Convert normalized coords to pixel coords
+            // Convert normalized → pixel
             let px = point.x * Float(imageWidth)
             let py = point.y * Float(imageHeight)
 
-            // Create ray from camera through the pixel
+            // Ray from camera through pixel
             let pixelHomogeneous = SIMD3<Float>(px, py, 1.0)
             let cameraSpaceDir = invIntrinsics * pixelHomogeneous
             let worldDir = cameraTransform.transformDirection(cameraSpaceDir).normalized
 
-            // Try ray-mesh intersection first (most accurate)
+            // Primary: Möller-Trumbore against the frozen mesh
             if let hit = rayMeshIntersection(
                 origin: cameraPosition,
                 direction: worldDir,
@@ -66,27 +78,38 @@ public final class BoundaryProjector {
                 faces: faces
             ) {
                 projected.append(hit)
+                meshHits += 1
             } else {
-                // Fallback: use depth map with bilinear interpolation
-                let worldPoint = depthMapFallback(
+                // Fallback: depth-map sampling on HIGH-CONFIDENCE pixels only
+                let (worldPoint, sampledConfidence) = depthMapFallback(
                     normalizedPoint: point,
                     depthMap: depthMap,
                     depthWidth: depthWidth,
                     depthHeight: depthHeight,
+                    confidenceMap: confidenceMap,
                     intrinsics: intrinsics,
                     cameraTransform: cameraTransform
                 )
                 projected.append(worldPoint)
+                confidenceSum += sampledConfidence
+                confidenceSamples += 1
             }
         }
 
-        return projected
+        let hitRate = Double(meshHits) / Double(points2D.count)
+        let meanConf = confidenceSamples > 0
+            ? confidenceSum / Double(confidenceSamples)
+            : 2.0   // all mesh hits → treat as full confidence
+
+        return BoundaryProjectionResult(
+            projectedPoints3D: projected,
+            meshHitRate: hitRate,
+            meanDepthConfidence: meanConf
+        )
     }
 
-    // MARK: - Ray-Mesh Intersection
+    // MARK: - Ray-Mesh Intersection (Möller-Trumbore)
 
-    /// Cast a ray and find the nearest triangle intersection.
-    /// Uses Möller-Trumbore algorithm for each triangle.
     private static func rayMeshIntersection(
         origin: SIMD3<Float>,
         direction: SIMD3<Float>,
@@ -102,36 +125,28 @@ public final class BoundaryProjector {
             let i0 = Int(face.x)
             let i1 = Int(face.y)
             let i2 = Int(face.z)
-
             guard i0 < vertices.count, i1 < vertices.count, i2 < vertices.count else { continue }
 
             let v0 = vertices[i0]
             let v1 = vertices[i1]
             let v2 = vertices[i2]
 
-            // Möller-Trumbore intersection
             let edge1 = v1 - v0
             let edge2 = v2 - v0
             let h = direction.cross(edge2)
             let a = edge1.dot(h)
-
-            // Ray is parallel to triangle
             guard abs(a) > epsilon else { continue }
 
             let f = 1.0 / a
             let s = origin - v0
             let u = f * s.dot(h)
-
             guard u >= 0.0, u <= 1.0 else { continue }
 
             let q = s.cross(edge1)
             let v = f * direction.dot(q)
-
             guard v >= 0.0, u + v <= 1.0 else { continue }
 
             let t = f * edge2.dot(q)
-
-            // Intersection is in front of the ray and closer than previous
             if t > epsilon, t < nearestT {
                 nearestT = t
                 nearestPoint = origin + t * direction
@@ -141,42 +156,73 @@ public final class BoundaryProjector {
         return nearestPoint
     }
 
-    // MARK: - Depth Map Fallback
+    // MARK: - Depth Map Fallback (Confidence-Filtered)
 
-    /// Project a 2D point to 3D using the depth map with bilinear interpolation.
+    /// Sample the depth map at the point's coordinates, but only consider
+    /// pixels with confidence ≥ minConfidence. If all 4 nearest neighbors
+    /// are low-confidence, expand outward to find the nearest high-confidence
+    /// sample within a small search radius.
+    /// Returns (worldPoint, mean sampled confidence value).
     private static func depthMapFallback(
         normalizedPoint: SIMD2<Float>,
         depthMap: [Float],
         depthWidth: Int,
         depthHeight: Int,
+        confidenceMap: [UInt8],
         intrinsics: simd_float3x3,
         cameraTransform: simd_float4x4
-    ) -> SIMD3<Float> {
+    ) -> (SIMD3<Float>, Double) {
 
-        // Map normalized image coords to depth map coords
         let dx = normalizedPoint.x * Float(depthWidth - 1)
         let dy = normalizedPoint.y * Float(depthHeight - 1)
 
-        // Bilinear interpolation of depth
-        let x0 = Int(dx)
-        let y0 = Int(dy)
-        let x1 = min(x0 + 1, depthWidth - 1)
-        let y1 = min(y0 + 1, depthHeight - 1)
+        let centerX = Int(dx.rounded())
+        let centerY = Int(dy.rounded())
 
-        let fx = dx - Float(x0)
-        let fy = dy - Float(y0)
+        // Look for nearest high-confidence pixel within a small window
+        var bestDepth: Float = 0
+        var bestConf: UInt8 = 0
+        var foundHighConf = false
 
-        let d00 = depthMap[y0 * depthWidth + x0]
-        let d10 = depthMap[y0 * depthWidth + x1]
-        let d01 = depthMap[y1 * depthWidth + x0]
-        let d11 = depthMap[y1 * depthWidth + x1]
+        let searchRadius = 4
+        var minDist = Int.max
 
-        let depth = d00 * (1 - fx) * (1 - fy)
-            + d10 * fx * (1 - fy)
-            + d01 * (1 - fx) * fy
-            + d11 * fx * fy
+        for dyOff in -searchRadius...searchRadius {
+            for dxOff in -searchRadius...searchRadius {
+                let row = centerY + dyOff
+                let col = centerX + dxOff
+                guard row >= 0, row < depthHeight, col >= 0, col < depthWidth else { continue }
 
-        // Unproject to camera space using intrinsics
+                let idx = row * depthWidth + col
+                guard idx < depthMap.count else { continue }
+
+                let conf: UInt8 = idx < confidenceMap.count ? confidenceMap[idx] : 0
+                let depth = depthMap[idx]
+                guard depth > 0, depth.isFinite else { continue }
+
+                if conf >= minConfidence {
+                    let dist = dxOff * dxOff + dyOff * dyOff
+                    if dist < minDist {
+                        minDist = dist
+                        bestDepth = depth
+                        bestConf = conf
+                        foundHighConf = true
+                    }
+                }
+            }
+        }
+
+        // If no high-confidence sample found, use bilinear interpolation
+        // as a last resort and report the (low) confidence.
+        if !foundHighConf {
+            let x0 = max(0, min(centerX, depthWidth - 1))
+            let y0 = max(0, min(centerY, depthHeight - 1))
+            let idx = y0 * depthWidth + x0
+            bestDepth = idx < depthMap.count ? depthMap[idx] : 0
+            bestConf = idx < confidenceMap.count ? confidenceMap[idx] : 0
+        }
+
+        // Unproject to camera space
         let fx_cam = intrinsics[0][0]
         let fy_cam = intrinsics[1][1]
         let cx = intrinsics[2][0]
@@ -186,12 +232,12 @@ public final class BoundaryProjector {
         let pixelY = normalizedPoint.y * Float(depthHeight)
 
         let cameraPoint = SIMD3<Float>(
-            (pixelX - cx) * depth / fx_cam,
-            (pixelY - cy) * depth / fy_cam,
-            depth
+            (pixelX - cx) * bestDepth / fx_cam,
+            (pixelY - cy) * bestDepth / fy_cam,
+            bestDepth
         )
 
-        // Transform to world space
-        return cameraTransform.transformPoint(cameraPoint)
+        let worldPoint = cameraTransform.transformPoint(cameraPoint)
+        return (worldPoint, Double(bestConf))
     }
 }

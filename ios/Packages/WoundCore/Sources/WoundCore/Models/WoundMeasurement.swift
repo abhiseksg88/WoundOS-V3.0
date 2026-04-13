@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 // MARK: - Wound Measurement
 
@@ -29,6 +30,17 @@ public struct WoundMeasurement: Codable, Sendable, Equatable {
     /// Perimeter of the wound boundary on the mesh surface in mm
     public let perimeterMm: Double
 
+    /// 3D world-space endpoints of the length axis (rotating-calipers result).
+    /// Used by the UI overlay to draw the actual L axis.
+    public let lengthEndpoints3D: [SIMD3<Float>]?
+
+    /// 3D world-space endpoints of the width axis (rotating-calipers result).
+    public let widthEndpoints3D: [SIMD3<Float>]?
+
+    /// Capture quality metadata stamped at measurement time.
+    /// nil if computed without a quality monitor (e.g., backend recompute).
+    public let qualityScore: CaptureQualityScore?
+
     /// Who/what produced this measurement
     public let source: MeasurementSource
 
@@ -49,6 +61,9 @@ public struct WoundMeasurement: Codable, Sendable, Equatable {
         lengthMm: Double,
         widthMm: Double,
         perimeterMm: Double,
+        lengthEndpoints3D: [SIMD3<Float>]? = nil,
+        widthEndpoints3D: [SIMD3<Float>]? = nil,
+        qualityScore: CaptureQualityScore? = nil,
         source: MeasurementSource,
         computedOnDevice: Bool,
         processingTimeMs: Int,
@@ -61,6 +76,9 @@ public struct WoundMeasurement: Codable, Sendable, Equatable {
         self.lengthMm = lengthMm
         self.widthMm = widthMm
         self.perimeterMm = perimeterMm
+        self.lengthEndpoints3D = lengthEndpoints3D
+        self.widthEndpoints3D = widthEndpoints3D
+        self.qualityScore = qualityScore
         self.source = source
         self.computedOnDevice = computedOnDevice
         self.processingTimeMs = processingTimeMs

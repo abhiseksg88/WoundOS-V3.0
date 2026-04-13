@@ -21,6 +21,9 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
     /// Publisher for the latest AR frame (throttled to ~10 fps for UI preview)
     public let framePublisher = PassthroughSubject<ARFrame, Never>()
 
+    /// Strict pre-capture quality monitor. Apple Measure-style gating.
+    public let qualityMonitor: CaptureQualityMonitor
+
     /// Current distance estimate to the nearest surface (meters)
     public private(set) var estimatedDistance: Float?
 
@@ -36,8 +39,12 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
 
     // MARK: - Init
 
-    public init(configuration: CaptureSessionConfiguration = .default) {
+    public init(
+        configuration: CaptureSessionConfiguration = .default,
+        qualityMonitor: CaptureQualityMonitor = CaptureQualityMonitor()
+    ) {
         self.configuration = configuration
+        self.qualityMonitor = qualityMonitor
         super.init()
         session.delegate = self
     }
@@ -62,10 +69,12 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
         }
 
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        qualityMonitor.reset()
     }
 
     public func pauseSession() {
         session.pause()
+        qualityMonitor.reset()
     }
 
     // MARK: - Capture (Freeze Frame)
@@ -299,6 +308,15 @@ extension ARSessionManager: ARSessionDelegate {
     public func session(_ session: ARSession, didUpdate frame: ARFrame) {
         currentFrame = frame
         updateDistanceEstimate(from: frame)
+
+        // Drive strict pre-capture quality gating
+        let totalVerts = meshAnchors.reduce(0) { $0 + $1.geometry.vertices.count }
+        qualityMonitor.update(frame: frame, meshAnchorVertexCount: totalVerts)
+
+        // Mirror the monitor's internal distance into our public property
+        if let d = qualityMonitor.lastDistance {
+            estimatedDistance = d
+        }
 
         // Throttle frame publishing for UI (every 3rd frame ≈ 10 fps at 30 fps input)
         framePublisher.send(frame)

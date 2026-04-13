@@ -6,20 +6,22 @@ import simd
 /// Contract for computing wound measurements from a boundary
 /// projected onto frozen ARKit mesh data. All implementations
 /// must be deterministic given the same inputs.
+///
+/// Camera intrinsics + transform are required so the rigorous
+/// MeshClipper can project 3D mesh vertices to image space for
+/// the boundary-containment test.
 public protocol MeasurementEngineProtocol {
 
-    /// Compute all clinical measurements from a boundary and capture data.
-    /// - Parameters:
-    ///   - boundary: The wound boundary with projected 3D points
-    ///   - vertices: Mesh vertices in world coordinates
-    ///   - faces: Mesh triangle face indices
-    ///   - normals: Per-vertex normals
-    /// - Returns: Complete wound measurement
     func computeMeasurements(
         boundary: WoundBoundary,
         vertices: [SIMD3<Float>],
         faces: [SIMD3<UInt32>],
-        normals: [SIMD3<Float>]
+        normals: [SIMD3<Float>],
+        cameraIntrinsics: simd_float3x3,
+        cameraTransform: simd_float4x4,
+        imageWidth: Int,
+        imageHeight: Int,
+        qualityScore: CaptureQualityScore?
     ) throws -> WoundMeasurement
 }
 

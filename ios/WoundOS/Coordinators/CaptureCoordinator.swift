@@ -24,8 +24,8 @@ final class CaptureCoordinator: Coordinator {
 
     private func showCapture() {
         let viewModel = CaptureViewModel(captureProvider: dependencies.captureProvider)
-        viewModel.onCaptureComplete = { [weak self] snapshot in
-            self?.showBoundaryDrawing(snapshot: snapshot)
+        viewModel.onCaptureComplete = { [weak self] snapshot, qualityScore in
+            self?.showBoundaryDrawing(snapshot: snapshot, qualityScore: qualityScore)
         }
 
         let viewController = CaptureViewController(viewModel: viewModel)
@@ -35,10 +35,11 @@ final class CaptureCoordinator: Coordinator {
 
     // MARK: - Step 2: Boundary Drawing
 
-    private func showBoundaryDrawing(snapshot: CaptureSnapshot) {
+    private func showBoundaryDrawing(snapshot: CaptureSnapshot, qualityScore: CaptureQualityScore?) {
         let viewModel = BoundaryDrawingViewModel(
             snapshot: snapshot,
-            measurementEngine: dependencies.measurementEngine
+            measurementEngine: dependencies.measurementEngine,
+            qualityScoreSnapshot: qualityScore
         )
         viewModel.onMeasurementComplete = { [weak self] scan in
             self?.showMeasurementResult(scan: scan)

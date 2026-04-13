@@ -1,26 +1,30 @@
 import Foundation
 import Combine
+import ARKit
 import WoundCore
 import WoundCapture
 
 // MARK: - Capture View Model
 
+/// Capture screen view model. Drives strict pre-capture gating
+/// from the CaptureQualityMonitor's published readiness state.
 final class CaptureViewModel: ObservableObject {
 
     // MARK: - Published State
 
     @Published var trackingState: TrackingState = .notAvailable
-    @Published var estimatedDistance: Float?
-    @Published var isReadyToCapture = false
+    @Published var readiness: CaptureReadiness = .notReady(reason: .trackingNotNormal)
     @Published var error: String?
 
     // MARK: - Navigation
 
-    var onCaptureComplete: ((CaptureSnapshot) -> Void)?
+    /// Provides both the snapshot and the moment-of-capture quality score.
+    var onCaptureComplete: ((CaptureSnapshot, CaptureQualityScore?) -> Void)?
 
     // MARK: - Dependencies
 
     private let captureProvider: CaptureProviderProtocol
+    private let qualityMonitor: CaptureQualityMonitor?
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Computed
@@ -29,32 +33,42 @@ final class CaptureViewModel: ObservableObject {
         captureProvider.isLiDARAvailable
     }
 
-    var distanceGuidance: String {
-        guard let distance = estimatedDistance else {
-            return "Move device closer to wound"
-        }
-        if distance < 0.10 {
-            return "Too close — move back"
-        } else if distance < 0.15 {
-            return "Getting close — good"
-        } else if distance <= 0.30 {
-            return "Perfect distance (\(Int(distance * 100)) cm)"
-        } else if distance <= 0.50 {
-            return "Move closer to wound"
-        } else {
-            return "Too far — move much closer"
+    /// The underlying ARSession so the view controller can attach an ARSCNView.
+    var arSession: ARSession? {
+        (captureProvider as? ARSessionManager)?.session
+    }
+
+    /// True when all four strict gates are satisfied.
+    var isReadyToCapture: Bool {
+        readiness.isReady
+    }
+
+    /// Human-readable guidance shown on the floating card.
+    var guidanceText: String {
+        switch readiness {
+        case .ready:
+            if let d = qualityMonitor?.lastDistance {
+                return String(format: "Ready — %.0f cm", d * 100)
+            }
+            return "Ready"
+        case .notReady(let reason):
+            return reason.displayMessage
         }
     }
 
-    var isOptimalDistance: Bool {
-        guard let distance = estimatedDistance else { return false }
-        return (0.15...0.30).contains(distance)
+    /// SF Symbol icon name for the guidance card.
+    var guidanceIconName: String {
+        switch readiness {
+        case .ready: return "checkmark.circle.fill"
+        case .notReady(let reason): return reason.iconName
+        }
     }
 
     // MARK: - Init
 
     init(captureProvider: CaptureProviderProtocol) {
         self.captureProvider = captureProvider
+        self.qualityMonitor = (captureProvider as? ARSessionManager)?.qualityMonitor
         setupBindings()
     }
 
@@ -75,9 +89,18 @@ final class CaptureViewModel: ObservableObject {
     // MARK: - Capture
 
     func capture() {
+        // Strict gate enforcement at the call site too
+        guard readiness.isReady else { return }
         do {
             let snapshot = try captureProvider.captureSnapshot()
-            onCaptureComplete?(snapshot)
+            // Stamp pre-capture quality info; mesh hit rate / depth confidence
+            // get filled in by BoundaryDrawingViewModel after projection runs.
+            let preQuality = qualityMonitor?.qualityScoreSnapshot(
+                meshVertexCount: snapshot.vertices.count,
+                meanDepthConfidence: 0,
+                meshHitRate: 0
+            )
+            onCaptureComplete?(snapshot, preQuality)
         } catch {
             self.error = error.localizedDescription
         }
@@ -89,20 +112,15 @@ final class CaptureViewModel: ObservableObject {
         captureProvider.onTrackingStateChanged = { [weak self] state in
             DispatchQueue.main.async {
                 self?.trackingState = state
-                if case .normal = state {
-                    self?.isReadyToCapture = true
-                } else {
-                    self?.isReadyToCapture = false
-                }
             }
         }
 
-        // Poll distance from ARSessionManager
-        if let arManager = captureProvider as? ARSessionManager {
-            Timer.publish(every: 0.2, on: .main, in: .common)
-                .autoconnect()
-                .sink { [weak self, weak arManager] _ in
-                    self?.estimatedDistance = arManager?.estimatedDistance
+        // Subscribe to readiness updates from the strict quality monitor
+        if let monitor = qualityMonitor {
+            monitor.readinessPublisher
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] readiness in
+                    self?.readiness = readiness
                 }
                 .store(in: &cancellables)
         }

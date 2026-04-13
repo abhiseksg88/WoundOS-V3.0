@@ -163,6 +163,14 @@ final class ScanDetailViewController: UIViewController {
         contentStack.addArrangedSubview(padCard(pushCard))
         contentStack.addArrangedSubview(makeSpacer(WOSpacing.sectionSpacing))
 
+        // === Capture Quality (from CaptureQualityScore) ===
+        if viewModel.hasQualityScore {
+            let title = "Capture Quality" + (viewModel.qualityTier.map { " — \($0)" } ?? "")
+            contentStack.addArrangedSubview(WOSectionHeader(title: title))
+            contentStack.addArrangedSubview(padCard(makeCard(rows: viewModel.qualityRows.map { ($0.label, $0.value, "") })))
+            contentStack.addArrangedSubview(makeSpacer(WOSpacing.sectionSpacing))
+        }
+
         // === Nurse vs AI Comparison ===
         if viewModel.hasShadowData {
             contentStack.addArrangedSubview(WOSectionHeader(title: "Nurse vs AI Comparison"))

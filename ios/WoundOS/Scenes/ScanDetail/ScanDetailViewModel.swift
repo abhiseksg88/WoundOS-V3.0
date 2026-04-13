@@ -93,6 +93,28 @@ final class ScanDetailViewModel: ObservableObject {
         scan.clinicalSummary
     }
 
+    // MARK: - Capture Quality
+
+    var hasQualityScore: Bool {
+        scan.primaryMeasurement.qualityScore != nil
+    }
+
+    var qualityTier: String? {
+        scan.primaryMeasurement.qualityScore?.tier.displayName
+    }
+
+    var qualityRows: [(label: String, value: String)] {
+        guard let q = scan.primaryMeasurement.qualityScore else { return [] }
+        return [
+            ("Tracking Stable", String(format: "%.1f s", q.trackingStableSeconds)),
+            ("Capture Distance", String(format: "%.0f cm", q.captureDistanceM * 100)),
+            ("Mesh Vertices", "\(q.meshVertexCount)"),
+            ("Depth Confidence", String(format: "%.2f / 2.0", q.meanDepthConfidence)),
+            ("Mesh Hit Rate", String(format: "%.0f%%", q.meshHitRate * 100)),
+            ("Motion (rad/s)", String(format: "%.3f", q.angularVelocityRadPerSec)),
+        ]
+    }
+
     // MARK: - Upload Status
 
     var uploadStatusText: String {

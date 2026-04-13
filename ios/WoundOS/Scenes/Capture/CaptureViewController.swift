@@ -134,8 +134,8 @@ final class CaptureViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         viewModel.startSession()
-        if let arManager = viewModel as? ARSessionManagerAccessor {
-            arView.session = arManager.arSession
+        if let session = viewModel.arSession {
+            arView.session = session
         }
     }
 
@@ -207,27 +207,20 @@ final class CaptureViewController: UIViewController {
     // MARK: - Bindings
 
     private func bindViewModel() {
-        viewModel.$isReadyToCapture
+        // Strict gating drives the capture button + guidance card together.
+        viewModel.$readiness
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] ready in
-                self?.captureButton.isEnabled = ready
-                self?.captureButton.alpha = ready ? 1.0 : 0.4
-            }
-            .store(in: &cancellables)
-
-        viewModel.$estimatedDistance
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+            .sink { [weak self] readiness in
                 guard let self else { return }
-                self.guidanceLabel.text = self.viewModel.distanceGuidance
+                let isReady = readiness.isReady
+                self.captureButton.isEnabled = isReady
+                self.captureButton.alpha = isReady ? 1.0 : 0.35
 
-                if self.viewModel.isOptimalDistance {
-                    self.guidanceIcon.image = UIImage(systemName: "checkmark.circle.fill")
-                    self.guidanceIcon.tintColor = WOColors.primaryGreen
-                } else {
-                    self.guidanceIcon.image = UIImage(systemName: "ruler")
-                    self.guidanceIcon.tintColor = WOColors.warningOrange
-                }
+                self.guidanceLabel.text = self.viewModel.guidanceText
+                self.guidanceIcon.image = UIImage(systemName: self.viewModel.guidanceIconName)
+                self.guidanceIcon.tintColor = isReady
+                    ? WOColors.primaryGreen
+                    : WOColors.warningOrange
             }
             .store(in: &cancellables)
 
@@ -287,8 +280,3 @@ final class CaptureViewController: UIViewController {
     }
 }
 
-// MARK: - AR Session Accessor
-
-protocol ARSessionManagerAccessor {
-    var arSession: ARSession { get }
-}

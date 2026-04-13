@@ -1,5 +1,7 @@
 import UIKit
 import Combine
+import simd
+import WoundCore
 
 // MARK: - Measurement Result View Controller
 
@@ -294,56 +296,48 @@ final class MeasurementResultViewController: UIViewController {
         return container
     }
 
-    /// Create approximate L/W endpoints from boundary centroid and dimensions.
-    /// In a real implementation these come from the DimensionCalculator's actual endpoints.
+    /// Project the actual rotating-calipers length endpoints (3D world space)
+    /// back to normalized 2D image coordinates for the overlay.
     private func makeLengthEndpoints() -> (CGPoint, CGPoint)? {
-        let points = viewModel.boundaryPointsCG
-        guard points.count >= 3 else { return nil }
-
-        // Approximate: find the two points farthest apart (length axis)
-        var maxDist: CGFloat = 0
-        var best: (CGPoint, CGPoint) = (points[0], points[1])
-        for i in 0..<points.count {
-            for j in (i+1)..<points.count {
-                let dx = points[i].x - points[j].x
-                let dy = points[i].y - points[j].y
-                let dist = dx * dx + dy * dy
-                if dist > maxDist {
-                    maxDist = dist
-                    best = (points[i], points[j])
-                }
-            }
+        guard let endpoints3D = viewModel.scan.primaryMeasurement.lengthEndpoints3D,
+              endpoints3D.count == 2 else {
+            return nil
         }
-        return best
+        return projectEndpoints(endpoints3D[0], endpoints3D[1])
     }
 
+    /// Project the actual rotating-calipers width endpoints to 2D.
     private func makeWidthEndpoints() -> (CGPoint, CGPoint)? {
-        let points = viewModel.boundaryPointsCG
-        guard points.count >= 3, let lengthEP = makeLengthEndpoints() else { return nil }
+        guard let endpoints3D = viewModel.scan.primaryMeasurement.widthEndpoints3D,
+              endpoints3D.count == 2 else {
+            return nil
+        }
+        return projectEndpoints(endpoints3D[0], endpoints3D[1])
+    }
 
-        // Width axis perpendicular to length
-        let lengthDir = CGPoint(
-            x: lengthEP.1.x - lengthEP.0.x,
-            y: lengthEP.1.y - lengthEP.0.y
-        )
-        let perpDir = CGPoint(x: -lengthDir.y, y: lengthDir.x)
-        let perpLen = sqrt(perpDir.x * perpDir.x + perpDir.y * perpDir.y)
-        guard perpLen > 0 else { return nil }
-        let normPerp = CGPoint(x: perpDir.x / perpLen, y: perpDir.y / perpLen)
+    /// Project two 3D world-space points to normalized 2D image coordinates
+    /// using the frozen camera parameters from the capture data.
+    private func projectEndpoints(
+        _ a3d: SIMD3<Float>,
+        _ b3d: SIMD3<Float>
+    ) -> (CGPoint, CGPoint)? {
+        let captureData = viewModel.scan.captureData
+        let intrinsics = captureData.intrinsicsMatrix
+        let transform = captureData.transformMatrix
+        let viewMatrix = transform.inverse
 
-        // Find extreme points along perpendicular
-        var minProj: CGFloat = .greatestFiniteMagnitude
-        var maxProj: CGFloat = -.greatestFiniteMagnitude
-        var minPt = points[0]
-        var maxPt = points[0]
-
-        for p in points {
-            let proj = p.x * normPerp.x + p.y * normPerp.y
-            if proj < minProj { minProj = proj; minPt = p }
-            if proj > maxProj { maxProj = proj; maxPt = p }
+        func projectPoint(_ world: SIMD3<Float>) -> CGPoint? {
+            let camHomog = viewMatrix * SIMD4<Float>(world.x, world.y, world.z, 1.0)
+            let camPoint = SIMD3<Float>(camHomog.x, camHomog.y, camHomog.z)
+            guard camPoint.z > 0 else { return nil }
+            let projected = intrinsics * camPoint
+            let nx = projected.x / (projected.z * Float(captureData.imageWidth))
+            let ny = projected.y / (projected.z * Float(captureData.imageHeight))
+            return CGPoint(x: CGFloat(nx), y: CGFloat(ny))
         }
 
-        return (minPt, maxPt)
+        guard let a = projectPoint(a3d), let b = projectPoint(b3d) else { return nil }
+        return (a, b)
     }
 
     // MARK: - Bindings
