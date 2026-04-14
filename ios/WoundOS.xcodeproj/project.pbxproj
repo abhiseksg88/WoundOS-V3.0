@@ -1,0 +1,548 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		BBBB00000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000001 /* AppDelegate.swift */; };
+		BBBB00000000000000000002 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000002 /* DependencyContainer.swift */; };
+		BBBB00000000000000000003 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000003 /* SceneDelegate.swift */; };
+		BBBB00000000000000000004 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000004 /* AppCoordinator.swift */; };
+		BBBB00000000000000000005 /* CaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000005 /* CaptureCoordinator.swift */; };
+		BBBB00000000000000000006 /* Coordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000006 /* Coordinator.swift */; };
+		BBBB00000000000000000007 /* ScanListCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000007 /* ScanListCoordinator.swift */; };
+		BBBB00000000000000000008 /* BoundaryDrawingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000008 /* BoundaryDrawingViewController.swift */; };
+		BBBB00000000000000000009 /* BoundaryDrawingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000009 /* BoundaryDrawingViewModel.swift */; };
+		BBBB00000000000000000010 /* CaptureViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000010 /* CaptureViewController.swift */; };
+		BBBB00000000000000000011 /* CaptureViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000011 /* CaptureViewModel.swift */; };
+		BBBB00000000000000000012 /* MeasurementResultViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000012 /* MeasurementResultViewController.swift */; };
+		BBBB00000000000000000013 /* MeasurementResultViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000013 /* MeasurementResultViewModel.swift */; };
+		BBBB00000000000000000014 /* ScanDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000014 /* ScanDetailViewController.swift */; };
+		BBBB00000000000000000015 /* ScanDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000015 /* ScanDetailViewModel.swift */; };
+		BBBB00000000000000000016 /* ScanCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000016 /* ScanCell.swift */; };
+		BBBB00000000000000000017 /* ScanListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000017 /* ScanListViewController.swift */; };
+		BBBB00000000000000000018 /* ScanListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000018 /* ScanListViewModel.swift */; };
+		BBBB00000000000000000019 /* HealthStyleComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000019 /* HealthStyleComponents.swift */; };
+		BBBB00000000000000000020 /* WoundImageOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000020 /* WoundImageOverlayView.swift */; };
+		BBBB00000000000000000101 /* WoundCore in Frameworks */ = {isa = PBXBuildFile; productRef = 444400000000000000000001 /* WoundCore */; };
+		BBBB00000000000000000102 /* WoundCapture in Frameworks */ = {isa = PBXBuildFile; productRef = 444400000000000000000002 /* WoundCapture */; };
+		BBBB00000000000000000103 /* WoundBoundary in Frameworks */ = {isa = PBXBuildFile; productRef = 444400000000000000000003 /* WoundBoundary */; };
+		BBBB00000000000000000104 /* WoundMeasurement in Frameworks */ = {isa = PBXBuildFile; productRef = 444400000000000000000004 /* WoundMeasurement */; };
+		BBBB00000000000000000105 /* WoundNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 444400000000000000000005 /* WoundNetworking */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AAAA00000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000002 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000003 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000004 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000005 /* CaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureCoordinator.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000006 /* Coordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Coordinator.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000007 /* ScanListCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanListCoordinator.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000008 /* BoundaryDrawingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundaryDrawingViewController.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000009 /* BoundaryDrawingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoundaryDrawingViewModel.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000010 /* CaptureViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureViewController.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000011 /* CaptureViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureViewModel.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000012 /* MeasurementResultViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementResultViewController.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000013 /* MeasurementResultViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementResultViewModel.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000014 /* ScanDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDetailViewController.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000015 /* ScanDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanDetailViewModel.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000016 /* ScanCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanCell.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000017 /* ScanListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanListViewController.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000018 /* ScanListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanListViewModel.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000019 /* HealthStyleComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthStyleComponents.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000020 /* WoundImageOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WoundImageOverlayView.swift; sourceTree = "<group>"; };
+		AAAA00000000000000000021 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AAAA00000000000000000022 /* WoundOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WoundOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DDDD00000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BBBB00000000000000000101 /* WoundCore in Frameworks */,
+				BBBB00000000000000000102 /* WoundCapture in Frameworks */,
+				BBBB00000000000000000103 /* WoundBoundary in Frameworks */,
+				BBBB00000000000000000104 /* WoundMeasurement in Frameworks */,
+				BBBB00000000000000000105 /* WoundNetworking in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		CCCC00000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				CCCC00000000000000000002 /* WoundOS */,
+				CCCC00000000000000000013 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000002 /* WoundOS */ = {
+			isa = PBXGroup;
+			children = (
+				CCCC00000000000000000003 /* App */,
+				CCCC00000000000000000004 /* Coordinators */,
+				CCCC00000000000000000005 /* Scenes */,
+				CCCC00000000000000000011 /* Views */,
+				CCCC00000000000000000012 /* Resources */,
+			);
+			path = WoundOS;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000003 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000001 /* AppDelegate.swift */,
+				AAAA00000000000000000002 /* DependencyContainer.swift */,
+				AAAA00000000000000000003 /* SceneDelegate.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000004 /* Coordinators */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000004 /* AppCoordinator.swift */,
+				AAAA00000000000000000005 /* CaptureCoordinator.swift */,
+				AAAA00000000000000000006 /* Coordinator.swift */,
+				AAAA00000000000000000007 /* ScanListCoordinator.swift */,
+			);
+			path = Coordinators;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000005 /* Scenes */ = {
+			isa = PBXGroup;
+			children = (
+				CCCC00000000000000000006 /* BoundaryDrawing */,
+				CCCC00000000000000000007 /* Capture */,
+				CCCC00000000000000000008 /* Measurement */,
+				CCCC00000000000000000009 /* ScanDetail */,
+				CCCC00000000000000000010 /* ScanList */,
+			);
+			path = Scenes;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000006 /* BoundaryDrawing */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000008 /* BoundaryDrawingViewController.swift */,
+				AAAA00000000000000000009 /* BoundaryDrawingViewModel.swift */,
+			);
+			path = BoundaryDrawing;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000007 /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000010 /* CaptureViewController.swift */,
+				AAAA00000000000000000011 /* CaptureViewModel.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000008 /* Measurement */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000012 /* MeasurementResultViewController.swift */,
+				AAAA00000000000000000013 /* MeasurementResultViewModel.swift */,
+			);
+			path = Measurement;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000009 /* ScanDetail */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000014 /* ScanDetailViewController.swift */,
+				AAAA00000000000000000015 /* ScanDetailViewModel.swift */,
+			);
+			path = ScanDetail;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000010 /* ScanList */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000016 /* ScanCell.swift */,
+				AAAA00000000000000000017 /* ScanListViewController.swift */,
+				AAAA00000000000000000018 /* ScanListViewModel.swift */,
+			);
+			path = ScanList;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000011 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000019 /* HealthStyleComponents.swift */,
+				AAAA00000000000000000020 /* WoundImageOverlayView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000012 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000021 /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		CCCC00000000000000000013 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AAAA00000000000000000022 /* WoundOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		EEEE00000000000000000001 /* WoundOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FFFF00000000000000000001 /* Build configuration list for PBXNativeTarget "WoundOS" */;
+			buildPhases = (
+				DDDD00000000000000000001 /* Sources */,
+				DDDD00000000000000000002 /* Frameworks */,
+				DDDD00000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WoundOS;
+			packageProductDependencies = (
+				444400000000000000000001 /* WoundCore */,
+				444400000000000000000002 /* WoundCapture */,
+				444400000000000000000003 /* WoundBoundary */,
+				444400000000000000000004 /* WoundMeasurement */,
+				444400000000000000000005 /* WoundNetworking */,
+			);
+			productName = WoundOS;
+			productReference = AAAA00000000000000000022 /* WoundOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		222200000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					EEEE00000000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = FFFF00000000000000000002 /* Build configuration list for PBXProject "WoundOS" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = CCCC00000000000000000001;
+			packageReferences = (
+				333300000000000000000001 /* XCLocalSwiftPackageReference "Packages/WoundCore" */,
+				333300000000000000000002 /* XCLocalSwiftPackageReference "Packages/WoundCapture" */,
+				333300000000000000000003 /* XCLocalSwiftPackageReference "Packages/WoundBoundary" */,
+				333300000000000000000004 /* XCLocalSwiftPackageReference "Packages/WoundMeasurement" */,
+				333300000000000000000005 /* XCLocalSwiftPackageReference "Packages/WoundNetworking" */,
+			);
+			productRefGroup = CCCC00000000000000000013 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				EEEE00000000000000000001 /* WoundOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		DDDD00000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DDDD00000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BBBB00000000000000000001 /* AppDelegate.swift in Sources */,
+				BBBB00000000000000000002 /* DependencyContainer.swift in Sources */,
+				BBBB00000000000000000003 /* SceneDelegate.swift in Sources */,
+				BBBB00000000000000000004 /* AppCoordinator.swift in Sources */,
+				BBBB00000000000000000005 /* CaptureCoordinator.swift in Sources */,
+				BBBB00000000000000000006 /* Coordinator.swift in Sources */,
+				BBBB00000000000000000007 /* ScanListCoordinator.swift in Sources */,
+				BBBB00000000000000000008 /* BoundaryDrawingViewController.swift in Sources */,
+				BBBB00000000000000000009 /* BoundaryDrawingViewModel.swift in Sources */,
+				BBBB00000000000000000010 /* CaptureViewController.swift in Sources */,
+				BBBB00000000000000000011 /* CaptureViewModel.swift in Sources */,
+				BBBB00000000000000000012 /* MeasurementResultViewController.swift in Sources */,
+				BBBB00000000000000000013 /* MeasurementResultViewModel.swift in Sources */,
+				BBBB00000000000000000014 /* ScanDetailViewController.swift in Sources */,
+				BBBB00000000000000000015 /* ScanDetailViewModel.swift in Sources */,
+				BBBB00000000000000000016 /* ScanCell.swift in Sources */,
+				BBBB00000000000000000017 /* ScanListViewController.swift in Sources */,
+				BBBB00000000000000000018 /* ScanListViewModel.swift in Sources */,
+				BBBB00000000000000000019 /* HealthStyleComponents.swift in Sources */,
+				BBBB00000000000000000020 /* WoundImageOverlayView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		111100000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 3.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.woundos.clinical;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		111100000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 3.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.woundos.clinical;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		111100000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		111100000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		FFFF00000000000000000001 /* Build configuration list for PBXNativeTarget "WoundOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				111100000000000000000001 /* Debug */,
+				111100000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FFFF00000000000000000002 /* Build configuration list for PBXProject "WoundOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				111100000000000000000003 /* Debug */,
+				111100000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		333300000000000000000001 /* XCLocalSwiftPackageReference "Packages/WoundCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WoundCore;
+		};
+		333300000000000000000002 /* XCLocalSwiftPackageReference "Packages/WoundCapture" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WoundCapture;
+		};
+		333300000000000000000003 /* XCLocalSwiftPackageReference "Packages/WoundBoundary" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WoundBoundary;
+		};
+		333300000000000000000004 /* XCLocalSwiftPackageReference "Packages/WoundMeasurement" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WoundMeasurement;
+		};
+		333300000000000000000005 /* XCLocalSwiftPackageReference "Packages/WoundNetworking" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WoundNetworking;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		444400000000000000000001 /* WoundCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 333300000000000000000001 /* XCLocalSwiftPackageReference "Packages/WoundCore" */;
+			productName = WoundCore;
+		};
+		444400000000000000000002 /* WoundCapture */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 333300000000000000000002 /* XCLocalSwiftPackageReference "Packages/WoundCapture" */;
+			productName = WoundCapture;
+		};
+		444400000000000000000003 /* WoundBoundary */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 333300000000000000000003 /* XCLocalSwiftPackageReference "Packages/WoundBoundary" */;
+			productName = WoundBoundary;
+		};
+		444400000000000000000004 /* WoundMeasurement */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 333300000000000000000004 /* XCLocalSwiftPackageReference "Packages/WoundMeasurement" */;
+			productName = WoundMeasurement;
+		};
+		444400000000000000000005 /* WoundNetworking */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 333300000000000000000005 /* XCLocalSwiftPackageReference "Packages/WoundNetworking" */;
+			productName = WoundNetworking;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 222200000000000000000001 /* Project object */;
+}
