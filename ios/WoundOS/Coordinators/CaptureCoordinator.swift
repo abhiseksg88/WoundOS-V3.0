@@ -39,6 +39,7 @@ final class CaptureCoordinator: Coordinator {
         let viewModel = BoundaryDrawingViewModel(
             snapshot: snapshot,
             measurementEngine: dependencies.measurementEngine,
+            segmenter: dependencies.autoSegmenter,
             qualityScoreSnapshot: qualityScore
         )
         viewModel.onMeasurementComplete = { [weak self] scan in

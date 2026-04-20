@@ -3,6 +3,7 @@ import WoundCore
 import WoundCapture
 import WoundMeasurement
 import WoundNetworking
+import WoundAutoSegmentation
 
 // MARK: - Dependency Container
 
@@ -20,6 +21,22 @@ final class DependencyContainer {
 
     lazy var measurementEngine: MeshMeasurementEngine = {
         MeshMeasurementEngine()
+    }()
+
+    // MARK: - Auto-Segmentation
+
+    /// The on-device wound segmenter. Currently backed by Apple Vision's
+    /// `VNGenerateForegroundInstanceMaskRequest` (iOS 17+). Returns `nil`
+    /// on older OSes — the drawing scene falls back to manual polygon /
+    /// freeform drawing and hides the Auto segment.
+    ///
+    /// Phase 2 will swap this for a CoreML wound-fine-tuned SAM 2 / U-Net
+    /// conforming to the same `WoundSegmenter` protocol — no caller changes.
+    lazy var autoSegmenter: WoundSegmenter? = {
+        if #available(iOS 17.0, *) {
+            return VisionForegroundSegmenter()
+        }
+        return nil
     }()
 
     // MARK: - Networking

@@ -32,6 +32,7 @@
 		BBBB00000000000000000103 /* WoundBoundary in Frameworks */ = {isa = PBXBuildFile; productRef = 444400000000000000000003 /* WoundBoundary */; };
 		BBBB00000000000000000104 /* WoundMeasurement in Frameworks */ = {isa = PBXBuildFile; productRef = 444400000000000000000004 /* WoundMeasurement */; };
 		BBBB00000000000000000105 /* WoundNetworking in Frameworks */ = {isa = PBXBuildFile; productRef = 444400000000000000000005 /* WoundNetworking */; };
+		BBBB00000000000000000106 /* WoundAutoSegmentation in Frameworks */ = {isa = PBXBuildFile; productRef = 444400000000000000000006 /* WoundAutoSegmentation */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -69,6 +70,7 @@
 				BBBB00000000000000000103 /* WoundBoundary in Frameworks */,
 				BBBB00000000000000000104 /* WoundMeasurement in Frameworks */,
 				BBBB00000000000000000105 /* WoundNetworking in Frameworks */,
+				BBBB00000000000000000106 /* WoundAutoSegmentation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -221,6 +223,7 @@
 				444400000000000000000003 /* WoundBoundary */,
 				444400000000000000000004 /* WoundMeasurement */,
 				444400000000000000000005 /* WoundNetworking */,
+				444400000000000000000006 /* WoundAutoSegmentation */,
 			);
 			productName = WoundOS;
 			productReference = AAAA00000000000000000022 /* WoundOS.app */;
@@ -256,6 +259,7 @@
 				333300000000000000000003 /* XCLocalSwiftPackageReference "Packages/WoundBoundary" */,
 				333300000000000000000004 /* XCLocalSwiftPackageReference "Packages/WoundMeasurement" */,
 				333300000000000000000005 /* XCLocalSwiftPackageReference "Packages/WoundNetworking" */,
+				333300000000000000000006 /* XCLocalSwiftPackageReference "Packages/WoundAutoSegmentation" */,
 			);
 			productRefGroup = CCCC00000000000000000013 /* Products */;
 			projectDirPath = "";
@@ -514,6 +518,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/WoundNetworking;
 		};
+		333300000000000000000006 /* XCLocalSwiftPackageReference "Packages/WoundAutoSegmentation" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WoundAutoSegmentation;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -541,6 +549,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 333300000000000000000005 /* XCLocalSwiftPackageReference "Packages/WoundNetworking" */;
 			productName = WoundNetworking;
+		};
+		444400000000000000000006 /* WoundAutoSegmentation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 333300000000000000000006 /* XCLocalSwiftPackageReference "Packages/WoundAutoSegmentation" */;
+			productName = WoundAutoSegmentation;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
