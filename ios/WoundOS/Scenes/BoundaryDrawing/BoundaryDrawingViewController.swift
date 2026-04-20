@@ -49,11 +49,23 @@ final class BoundaryDrawingViewController: UIViewController {
     }()
 
     private lazy var modeToggle: UISegmentedControl = {
-        let control = UISegmentedControl(items: ["Polygon", "Freeform"])
+        let control = UISegmentedControl(items: ["Auto", "Polygon", "Freeform"])
         control.translatesAutoresizingMaskIntoConstraints = false
         control.selectedSegmentIndex = 0
         control.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
         return control
+    }()
+
+    /// Status label shown inside `processingOverlay`. Text is swapped between
+    /// "Detecting outline…" (auto-segmentation) and "Computing measurements…"
+    /// (mesh pipeline) depending on which operation is in flight.
+    private lazy var processingLabel: UILabel = {
+        let label = UILabel()
+        label.font = WOFonts.subheadline
+        label.textColor = .white
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
     }()
 
     private lazy var bottomBar: UIVisualEffectView = {
@@ -113,21 +125,14 @@ final class BoundaryDrawingViewController: UIViewController {
         view.backgroundColor = UIColor.black.withAlphaComponent(0.4)
         view.isHidden = true
 
-        let label = UILabel()
-        label.text = "Computing measurements..."
-        label.font = WOFonts.subheadline
-        label.textColor = .white
-        label.textAlignment = .center
-        label.translatesAutoresizingMaskIntoConstraints = false
-
         view.addSubview(activityIndicator)
-        view.addSubview(label)
+        view.addSubview(processingLabel)
 
         NSLayoutConstraint.activate([
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -16),
-            label.topAnchor.constraint(equalTo: activityIndicator.bottomAnchor, constant: WOSpacing.md),
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            processingLabel.topAnchor.constraint(equalTo: activityIndicator.bottomAnchor, constant: WOSpacing.md),
+            processingLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
         ])
 
         return view
@@ -151,6 +156,16 @@ final class BoundaryDrawingViewController: UIViewController {
         setupUI()
         bindViewModel()
         imageView.image = viewModel.capturedImage
+
+        // If the environment has no segmenter (pre-iOS-17 or DI returned nil),
+        // disable + hide the "Auto" segment and fall back to Polygon default.
+        if !viewModel.autoSegmenterAvailable {
+            modeToggle.setEnabled(false, forSegmentAt: 0)
+            modeToggle.selectedSegmentIndex = 1
+            viewModel.drawingMode = .polygon
+        } else {
+            modeToggle.selectedSegmentIndex = 0
+        }
     }
 
     // MARK: - UI Setup
@@ -259,13 +274,16 @@ final class BoundaryDrawingViewController: UIViewController {
         viewModel.$isComputing
             .receive(on: DispatchQueue.main)
             .sink { [weak self] computing in
-                self?.processingOverlay.isHidden = !computing
+                guard let self else { return }
                 if computing {
-                    self?.activityIndicator.startAnimating()
-                    self?.canvasView.isUserInteractionEnabled = false
-                } else {
-                    self?.activityIndicator.stopAnimating()
-                    self?.canvasView.isUserInteractionEnabled = true
+                    self.processingLabel.text = "Computing measurements…"
+                    self.processingOverlay.isHidden = false
+                    self.activityIndicator.startAnimating()
+                    self.canvasView.isUserInteractionEnabled = false
+                } else if !self.viewModel.isAutoSegmenting {
+                    self.processingOverlay.isHidden = true
+                    self.activityIndicator.stopAnimating()
+                    self.canvasView.isUserInteractionEnabled = true
                 }
             }
             .store(in: &cancellables)
@@ -277,12 +295,50 @@ final class BoundaryDrawingViewController: UIViewController {
                 self?.measureButton.alpha = finalized ? 1.0 : 0.5
             }
             .store(in: &cancellables)
+
+        viewModel.$isAutoSegmenting
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] running in
+                guard let self else { return }
+                if running {
+                    self.processingLabel.text = "Detecting outline…"
+                    self.processingOverlay.isHidden = false
+                    self.activityIndicator.startAnimating()
+                    self.canvasView.isUserInteractionEnabled = false
+                } else if !self.viewModel.isComputing {
+                    self.processingOverlay.isHidden = true
+                    self.activityIndicator.stopAnimating()
+                    self.canvasView.isUserInteractionEnabled = true
+                }
+            }
+            .store(in: &cancellables)
+
+        viewModel.autoSegmentationResult
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] polygon in
+                guard let self else { return }
+                self.canvasView.setBoundary(points: polygon)
+                // Canvas is now in .polygon mode; reflect in segmented control
+                // so the nurse understands they can edit vertices.
+                self.modeToggle.selectedSegmentIndex = 1
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Actions
 
     @objc private func modeChanged() {
-        viewModel.drawingMode = modeToggle.selectedSegmentIndex == 0 ? .polygon : .freeform
+        switch modeToggle.selectedSegmentIndex {
+        case 0: viewModel.drawingMode = .auto
+        case 1: viewModel.drawingMode = .polygon
+        case 2: viewModel.drawingMode = .freeform
+        default: break
+        }
+        // Switching modes should clear any in-progress sketch so the nurse
+        // doesn't end up with a half-freeform, half-polygon boundary.
+        canvasView.clearAll()
+        viewModel.clearBoundary()
     }
 
     @objc private func undoTapped() {

@@ -20,6 +20,9 @@ public enum DrawingMode {
     case tapPoint   // Initial wound center tap
     case polygon    // Tap-to-place vertices
     case freeform   // Continuous drag tracing
+    /// Nurse taps once; segmenter seeds a polygon; canvas becomes editable
+    /// (switched to `.polygon` after the seed boundary is delivered).
+    case auto
 }
 
 // MARK: - Boundary Canvas View
@@ -90,6 +93,19 @@ public final class BoundaryCanvasView: UIView {
 
     // MARK: - Public API
 
+    /// Seed the canvas with a boundary produced by an auto-segmenter.
+    /// Moves the canvas into `.polygon` mode so the nurse can edit vertices.
+    /// Does **not** re-fire `canvasDidPlaceTapPoint`; that has already been
+    /// delivered by the tap that triggered segmentation.
+    public func setBoundary(points: [CGPoint], keepTapPoint: Bool = true) {
+        if !keepTapPoint { tapPoint = nil }
+        boundaryPoints = points
+        isDrawingFreeform = false
+        drawingMode = .polygon
+        updateRendering()
+        delegate?.canvasDidFinalizeBoundary(boundaryPoints)
+    }
+
     /// Clear all drawn content and reset state
     public func clearAll() {
         tapPoint = nil
@@ -114,7 +130,7 @@ public final class BoundaryCanvasView: UIView {
         let location = touch.location(in: self)
 
         switch drawingMode {
-        case .tapPoint:
+        case .tapPoint, .auto:
             tapPoint = location
             updateRendering()
             delegate?.canvasDidPlaceTapPoint(location)
