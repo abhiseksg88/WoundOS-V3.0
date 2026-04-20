@@ -1,9 +1,11 @@
 import Foundation
 import Combine
 import simd
+import UIKit
 import WoundCore
 import WoundBoundary
 import WoundMeasurement
+import WoundAutoSegmentation
 
 // MARK: - Boundary Drawing View Model
 
@@ -15,8 +17,13 @@ final class BoundaryDrawingViewModel: ObservableObject {
     @Published var tapPoint: CGPoint?
     @Published var boundaryFinalized = false
     @Published var isComputing = false
+    @Published var isAutoSegmenting = false
     @Published var error: String?
     @Published var validationErrors: [BoundaryValidationError] = []
+
+    /// Emits the polygon produced by auto-segmentation so the VC can load it
+    /// into the canvas for the nurse to edit.
+    let autoSegmentationResult = PassthroughSubject<[CGPoint], Never>()
 
     // MARK: - Navigation
 
@@ -26,11 +33,17 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
     let snapshot: CaptureSnapshot
     private let measurementEngine: MeshMeasurementEngine
+    private let segmenter: WoundSegmenter?
     /// Pre-stamped quality score from the live capture moment.
     /// Includes mesh hit rate / confidence after measurement runs.
     private let qualityScoreSnapshot: CaptureQualityScore?
     private var normalizedTapPoint: SIMD2<Float>?
     private var normalizedBoundaryPoints: [SIMD2<Float>] = []
+    /// Tracks whether the current boundary was seeded by the auto-segmenter
+    /// (even if the nurse then edited it). Stored with the scan so audit
+    /// trails can distinguish AI-assisted from purely manual boundaries.
+    private var boundaryWasAutoSeeded = false
+    private var segmenterModelId: String?
 
     /// The captured RGB image for display
     var capturedImage: UIImage? {
@@ -45,19 +58,35 @@ final class BoundaryDrawingViewModel: ObservableObject {
             return "Tap around the wound edge to place points. Tap near the first point to close."
         case .freeform:
             return "Trace your finger around the wound edge"
+        case .auto:
+            return autoSegmenterAvailable
+                ? "Tap the center of the object — outline will appear automatically"
+                : "Auto-detect requires iOS 17. Switch to Polygon or Freeform."
         }
     }
+
+    /// True when a segmenter is injected and the current OS supports it.
+    /// The VC uses this to enable/disable the "Auto" segment.
+    var autoSegmenterAvailable: Bool { segmenter != nil }
 
     // MARK: - Init
 
     init(
         snapshot: CaptureSnapshot,
         measurementEngine: MeshMeasurementEngine,
+        segmenter: WoundSegmenter? = nil,
         qualityScoreSnapshot: CaptureQualityScore? = nil
     ) {
         self.snapshot = snapshot
         self.measurementEngine = measurementEngine
+        self.segmenter = segmenter
         self.qualityScoreSnapshot = qualityScoreSnapshot
+
+        // Default to Auto when a segmenter is available so the nurse flow is:
+        // tap center → polygon appears → edit if needed → Measure.
+        if segmenter != nil {
+            self.drawingMode = .auto
+        }
     }
 
     // MARK: - Tap Point
@@ -68,8 +97,79 @@ final class BoundaryDrawingViewModel: ObservableObject {
             Float(point.x / viewSize.width),
             Float(point.y / viewSize.height)
         )
-        // Advance to polygon drawing mode
-        drawingMode = .polygon
+
+        // In .auto mode, the tap is a point prompt for the segmenter. The VC
+        // subscribes to `autoSegmentationResult` and seeds the canvas with
+        // the resulting polygon. Otherwise, advance to polygon drawing mode.
+        if drawingMode == .auto {
+            runAutoSegmentation(tapPoint: point, viewSize: viewSize)
+        } else {
+            drawingMode = .polygon
+        }
+    }
+
+    // MARK: - Auto Segmentation
+
+    func runAutoSegmentation(tapPoint: CGPoint, viewSize: CGSize) {
+        guard let segmenter else {
+            error = "Auto-detect is not available on this device."
+            return
+        }
+        guard let image = capturedImage, let cgImage = image.cgImage else {
+            error = "Captured image is unavailable."
+            return
+        }
+
+        // Convert tap from view-local coords to image pixel coords. The
+        // image view uses .scaleAspectFit — same letterboxing logic the
+        // existing pipeline relies on — so we project through the fit rect.
+        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let fitRect = aspectFitRect(imageSize: imageSize, in: viewSize)
+        guard fitRect.contains(tapPoint) else {
+            error = "Tap inside the image area."
+            return
+        }
+        let imageTap = CGPoint(
+            x: (tapPoint.x - fitRect.minX) / fitRect.width * imageSize.width,
+            y: (tapPoint.y - fitRect.minY) / fitRect.height * imageSize.height
+        )
+
+        isAutoSegmenting = true
+        Task { @MainActor in
+            defer { isAutoSegmenting = false }
+            do {
+                let result = try await segmenter.segment(
+                    image: cgImage,
+                    tapPoint: imageTap
+                )
+                // Project polygon back into view-local coords for the canvas.
+                let viewPolygon = result.polygonImageSpace.map { p in
+                    CGPoint(
+                        x: fitRect.minX + p.x / imageSize.width * fitRect.width,
+                        y: fitRect.minY + p.y / imageSize.height * fitRect.height
+                    )
+                }
+                boundaryWasAutoSeeded = true
+                segmenterModelId = result.modelIdentifier
+                autoSegmentationResult.send(viewPolygon)
+            } catch {
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
+    private func aspectFitRect(imageSize: CGSize, in viewSize: CGSize) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
+        let scale = min(viewSize.width / imageSize.width, viewSize.height / imageSize.height)
+        let fittedSize = CGSize(
+            width: imageSize.width * scale,
+            height: imageSize.height * scale
+        )
+        let origin = CGPoint(
+            x: (viewSize.width - fittedSize.width) / 2,
+            y: (viewSize.height - fittedSize.height) / 2
+        )
+        return CGRect(origin: origin, size: fittedSize)
     }
 
     // MARK: - Boundary Updates
@@ -109,6 +209,8 @@ final class BoundaryDrawingViewModel: ObservableObject {
         drawingMode = .tapPoint
         normalizedTapPoint = nil
         tapPoint = nil
+        boundaryWasAutoSeeded = false
+        segmenterModelId = nil
     }
 
     // MARK: - Compute Measurements
@@ -145,10 +247,14 @@ final class BoundaryDrawingViewModel: ObservableObject {
                     confidenceMap: snapshot.confidenceMap
                 )
 
-                // 3. Build boundary model
+                // 3. Build boundary model.
+                // An auto-seeded boundary keeps its `.autoVision` source even
+                // if the nurse then hand-edited vertices — this matches the
+                // audit-trail design (all AI-assisted boundaries are flagged).
+                let source: BoundarySource = boundaryWasAutoSeeded ? .autoVision : .nurseDrawn
                 let boundary = WoundBoundary(
                     boundaryType: drawingMode == .freeform ? .freeform : .polygon,
-                    source: .nurseDrawn,
+                    source: source,
                     points2D: normalizedBoundaryPoints,
                     projectedPoints3D: projection.projectedPoints3D,
                     tapPoint: normalizedTapPoint
