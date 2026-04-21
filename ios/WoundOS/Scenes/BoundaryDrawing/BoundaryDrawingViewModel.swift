@@ -43,7 +43,11 @@ final class BoundaryDrawingViewModel: ObservableObject {
     /// (even if the nurse then edited it). Stored with the scan so audit
     /// trails can distinguish AI-assisted from purely manual boundaries.
     private var boundaryWasAutoSeeded = false
-    private var segmenterModelId: String?
+    private(set) var segmenterModelId: String?
+
+    /// Exposes the model identifier of the last successful segmentation
+    /// so the VC can indicate which model detected the boundary.
+    var lastSegmenterModelId: String? { segmenterModelId }
 
     /// The captured RGB image for display, cached to avoid repeated JPEG decoding.
     /// ARKit's pixel buffer is always landscape-right. Apply `.right`
@@ -150,6 +154,21 @@ final class BoundaryDrawingViewModel: ObservableObject {
                     tapPoint: sensorTap
                 )
                 CrashLogger.shared.log("Segmentation success: \(result.polygonImageSpace.count) polygon points, model=\(result.modelIdentifier)", category: .segmentation)
+
+                // Sanity check: reject polygons that cover > 40% of the image.
+                // A wound boundary should never be this large — it means the
+                // segmenter grabbed the entire foreground instead of the wound.
+                let polyArea = Self.polygonArea(result.polygonImageSpace)
+                let imageArea = result.imageSize.width * result.imageSize.height
+                let coverage = polyArea / imageArea
+                CrashLogger.shared.log("Polygon coverage: \(String(format: "%.1f%%", coverage * 100)) of image", category: .segmentation)
+
+                if coverage > 0.40 {
+                    CrashLogger.shared.log("Polygon rejected — covers \(String(format: "%.0f%%", coverage * 100)) of image", category: .segmentation, level: .warning)
+                    self.error = "Detection too large — tap directly on the wound, or use Draw Manually."
+                    return
+                }
+
                 // Project polygon from sensor pixels back to view-local coords.
                 let viewPolygon = result.polygonImageSpace.map { sensorPt in
                     geometry.sensorPixelToViewPoint(sensorPt)
@@ -392,6 +411,21 @@ final class BoundaryDrawingViewModel: ObservableObject {
             exudateAmount: .none,
             tissueType: .granulation
         )
+    }
+
+    // MARK: - Geometry Helpers
+
+    /// Shoelace formula for polygon area.
+    private static func polygonArea(_ points: [CGPoint]) -> CGFloat {
+        guard points.count >= 3 else { return 0 }
+        var area: CGFloat = 0
+        let n = points.count
+        for i in 0..<n {
+            let j = (i + 1) % n
+            area += points[i].x * points[j].y
+            area -= points[j].x * points[i].y
+        }
+        return abs(area) / 2
     }
 
     // MARK: - Build CaptureData

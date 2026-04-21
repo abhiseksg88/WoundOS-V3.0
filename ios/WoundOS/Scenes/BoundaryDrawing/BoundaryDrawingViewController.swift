@@ -415,6 +415,14 @@ final class BoundaryDrawingViewController: UIViewController {
                 self.modeToggle.selectedSegmentIndex = 1
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
 
+                // Show which model was used (helpful for debugging/user awareness)
+                if let modelId = self.viewModel.lastSegmenterModelId {
+                    let isServer = modelId.contains("sam2") || modelId.contains("server")
+                    self.instructionLabel.text = isServer
+                        ? "Boundary detected (AI) — adjust if needed"
+                        : "Boundary detected (on-device) — adjust if needed"
+                }
+
                 // 2. Auto-finalize with relaxed validation (machine-generated contour)
                 self.viewModel.autoFinalizeBoundary(polygon, in: self.currentGeometry)
 

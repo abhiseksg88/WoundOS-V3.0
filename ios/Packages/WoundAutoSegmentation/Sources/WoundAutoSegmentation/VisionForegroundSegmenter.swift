@@ -53,21 +53,55 @@ public final class VisionForegroundSegmenter: WoundSegmenter {
             throw SegmentationError.noForegroundDetected
         }
 
-        // 2. Use all detected instances — contour selection will pick the
-        //    blob nearest the tap. This avoids accessing the non-public
-        //    `instanceMask` property that crashes on iOS 17 (Bug 2 fix).
+        // 2. Try individual instances — find the one whose mask contains the tap point.
+        //    This avoids merging all foreground (arm + laptop + pillow) into one giant blob.
         let instances = observation.allInstances
         guard !instances.isEmpty else {
             throw SegmentationError.noForegroundDetected
         }
 
-        // 3. Generate combined binary mask for all foreground instances
+        // 3. Generate per-instance masks and pick the one under the tap point
         let maskBuffer: CVPixelBuffer
         do {
-            maskBuffer = try observation.generateScaledMaskForImage(
-                forInstances: instances,
-                from: handler
-            )
+            var bestMask: CVPixelBuffer?
+
+            // Check each instance individually
+            for instance in instances {
+                let individualMask = try observation.generateScaledMaskForImage(
+                    forInstances: IndexSet(integer: instance),
+                    from: handler
+                )
+                if Self.maskContainsTapPoint(individualMask, tapPoint: tapPoint, imageSize: imageSize) {
+                    bestMask = individualMask
+                    break
+                }
+            }
+
+            // Fallback: if no individual instance contains the tap,
+            // use the smallest instance (most likely a wound, not the whole arm)
+            if bestMask == nil {
+                var smallestArea = Int.max
+                for instance in instances {
+                    let individualMask = try observation.generateScaledMaskForImage(
+                        forInstances: IndexSet(integer: instance),
+                        from: handler
+                    )
+                    let area = Self.maskPixelCount(individualMask)
+                    if area < smallestArea && area > 0 {
+                        smallestArea = area
+                        bestMask = individualMask
+                    }
+                }
+            }
+
+            if let best = bestMask {
+                maskBuffer = best
+            } else {
+                maskBuffer = try observation.generateScaledMaskForImage(
+                    forInstances: instances,
+                    from: handler
+                )
+            }
         } catch {
             throw SegmentationError.maskGenerationFailed
         }
@@ -101,4 +135,78 @@ public final class VisionForegroundSegmenter: WoundSegmenter {
         )
     }
 
+    // MARK: - Mask Helpers
+
+    /// Check if the mask pixel at the tap point location is active (> 0.5).
+    private static func maskContainsTapPoint(
+        _ mask: CVPixelBuffer,
+        tapPoint: CGPoint,
+        imageSize: CGSize
+    ) -> Bool {
+        let maskWidth = CVPixelBufferGetWidth(mask)
+        let maskHeight = CVPixelBufferGetHeight(mask)
+        guard maskWidth > 0, maskHeight > 0,
+              imageSize.width > 0, imageSize.height > 0 else { return false }
+
+        // Map image-space tap to mask pixel coords
+        let mx = Int(tapPoint.x / imageSize.width * CGFloat(maskWidth))
+        let my = Int(tapPoint.y / imageSize.height * CGFloat(maskHeight))
+        guard mx >= 0, mx < maskWidth, my >= 0, my < maskHeight else { return false }
+
+        CVPixelBufferLockBaseAddress(mask, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(mask, .readOnly) }
+
+        guard let base = CVPixelBufferGetBaseAddress(mask) else { return false }
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(mask)
+
+        // OneComponent8 format — each pixel is a UInt8 (0-255)
+        let pixelFormat = CVPixelBufferGetPixelFormatType(mask)
+        if pixelFormat == kCVPixelFormatType_OneComponent8 {
+            let ptr = base.assumingMemoryBound(to: UInt8.self)
+            let value = ptr[my * bytesPerRow + mx]
+            return value > 128
+        }
+
+        // OneComponent32Float format
+        if pixelFormat == kCVPixelFormatType_OneComponent32Float {
+            let ptr = base.assumingMemoryBound(to: Float.self)
+            let floatsPerRow = bytesPerRow / MemoryLayout<Float>.size
+            let value = ptr[my * floatsPerRow + mx]
+            return value > 0.5
+        }
+
+        return false
+    }
+
+    /// Count non-zero pixels in the mask (approximation of instance area).
+    private static func maskPixelCount(_ mask: CVPixelBuffer) -> Int {
+        let width = CVPixelBufferGetWidth(mask)
+        let height = CVPixelBufferGetHeight(mask)
+        CVPixelBufferLockBaseAddress(mask, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(mask, .readOnly) }
+
+        guard let base = CVPixelBufferGetBaseAddress(mask) else { return 0 }
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(mask)
+        var count = 0
+
+        let pixelFormat = CVPixelBufferGetPixelFormatType(mask)
+        if pixelFormat == kCVPixelFormatType_OneComponent8 {
+            let ptr = base.assumingMemoryBound(to: UInt8.self)
+            for y in 0..<height {
+                for x in 0..<width {
+                    if ptr[y * bytesPerRow + x] > 128 { count += 1 }
+                }
+            }
+        } else if pixelFormat == kCVPixelFormatType_OneComponent32Float {
+            let ptr = base.assumingMemoryBound(to: Float.self)
+            let floatsPerRow = bytesPerRow / MemoryLayout<Float>.size
+            for y in 0..<height {
+                for x in 0..<width {
+                    if ptr[y * floatsPerRow + x] > 0.5 { count += 1 }
+                }
+            }
+        }
+
+        return count
+    }
 }
