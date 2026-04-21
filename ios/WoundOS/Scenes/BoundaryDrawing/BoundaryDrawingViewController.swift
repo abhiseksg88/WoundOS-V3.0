@@ -97,6 +97,22 @@ final class BoundaryDrawingViewController: UIViewController {
         return button
     }()
 
+    /// Yellow banner for non-blocking validation warnings (Bug 7).
+    private lazy var warningBanner: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = WOFonts.footnote
+        label.textColor = .black
+        label.textAlignment = .center
+        label.backgroundColor = WOColors.warningOrange.withAlphaComponent(0.9)
+        label.numberOfLines = 0
+        label.isHidden = true
+        label.layer.cornerRadius = 8
+        label.clipsToBounds = true
+        return label
+    }()
+
+    /// Red banner for real errors — segmentation / measurement failures (Bug 6).
     private lazy var errorBanner: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -108,8 +124,14 @@ final class BoundaryDrawingViewController: UIViewController {
         label.isHidden = true
         label.layer.cornerRadius = 8
         label.clipsToBounds = true
+        label.isUserInteractionEnabled = true
         return label
     }()
+
+    private var errorDismissTimer: Timer?
+
+    /// Cached geometry recomputed every layout pass (Bug 4).
+    private var currentGeometry = ImageViewGeometry(imageSize: .zero, viewSize: .zero)
 
     private lazy var activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
@@ -166,6 +188,25 @@ final class BoundaryDrawingViewController: UIViewController {
         } else {
             modeToggle.selectedSegmentIndex = 0
         }
+
+        // Dismiss error banner on tap
+        errorBanner.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(dismissErrorBanner))
+        )
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Recompute geometry every layout pass so coordinate conversion
+        // always uses the current view/image relationship (Bug 4).
+        let imageSize = CGSize(
+            width: viewModel.snapshot.imageWidth,
+            height: viewModel.snapshot.imageHeight
+        )
+        currentGeometry = ImageViewGeometry(
+            imageSize: imageSize,
+            viewSize: canvasView.bounds.size
+        )
     }
 
     // MARK: - UI Setup
@@ -177,6 +218,7 @@ final class BoundaryDrawingViewController: UIViewController {
         view.addSubview(canvasView)
         view.addSubview(instructionCard)
         view.addSubview(bottomBar)
+        view.addSubview(warningBanner)
         view.addSubview(errorBanner)
         view.addSubview(processingOverlay)
 
@@ -213,8 +255,13 @@ final class BoundaryDrawingViewController: UIViewController {
             instructionLabel.trailingAnchor.constraint(equalTo: instructionCard.contentView.trailingAnchor, constant: -WOSpacing.lg),
             instructionLabel.centerYAnchor.constraint(equalTo: instructionCard.contentView.centerYAnchor),
 
-            // Error banner
-            errorBanner.bottomAnchor.constraint(equalTo: bottomBar.topAnchor, constant: -WOSpacing.sm),
+            // Warning banner (yellow, non-blocking validation)
+            warningBanner.bottomAnchor.constraint(equalTo: bottomBar.topAnchor, constant: -WOSpacing.sm),
+            warningBanner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: WOSpacing.lg),
+            warningBanner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -WOSpacing.lg),
+
+            // Error banner (red, real errors)
+            errorBanner.bottomAnchor.constraint(equalTo: warningBanner.topAnchor, constant: -WOSpacing.xs),
             errorBanner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: WOSpacing.lg),
             errorBanner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -WOSpacing.lg),
 
@@ -259,14 +306,35 @@ final class BoundaryDrawingViewController: UIViewController {
             }
             .store(in: &cancellables)
 
+        // Validation warnings → yellow banner (non-blocking, Bug 7)
         viewModel.$validationErrors
             .receive(on: DispatchQueue.main)
             .sink { [weak self] errors in
                 if errors.isEmpty {
-                    self?.errorBanner.isHidden = true
+                    self?.warningBanner.isHidden = true
                 } else {
-                    self?.errorBanner.isHidden = false
-                    self?.errorBanner.text = "  " + errors.map(\.localizedDescription).joined(separator: ". ") + "  "
+                    self?.warningBanner.isHidden = false
+                    self?.warningBanner.text = "  " + errors.map(\.localizedDescription).joined(separator: ". ") + "  "
+                }
+            }
+            .store(in: &cancellables)
+
+        // Real errors → red banner with auto-dismiss (Bug 6)
+        viewModel.$error
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] errorMessage in
+                guard let self else { return }
+                self.errorDismissTimer?.invalidate()
+                if let message = errorMessage, !message.isEmpty {
+                    self.errorBanner.isHidden = false
+                    self.errorBanner.text = "  " + message + "  "
+                    self.errorDismissTimer = Timer.scheduledTimer(
+                        withTimeInterval: 5.0, repeats: false
+                    ) { [weak self] _ in
+                        self?.dismissErrorBanner()
+                    }
+                } else {
+                    self.errorBanner.isHidden = true
                 }
             }
             .store(in: &cancellables)
@@ -317,11 +385,20 @@ final class BoundaryDrawingViewController: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] polygon in
                 guard let self else { return }
+                // 1. Show the detected boundary + bounding box on the canvas
                 self.canvasView.setBoundary(points: polygon)
-                // Canvas is now in .polygon mode; reflect in segmented control
-                // so the nurse understands they can edit vertices.
                 self.modeToggle.selectedSegmentIndex = 1
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+                // 2. Auto-finalize with relaxed validation (machine-generated contour)
+                self.viewModel.autoFinalizeBoundary(polygon, in: self.currentGeometry)
+
+                // 3. Brief pause so the nurse sees the detection, then auto-measure
+                guard self.viewModel.boundaryFinalized else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self] in
+                    guard let self, self.viewModel.boundaryFinalized else { return }
+                    self.viewModel.computeMeasurementsWithDefaults()
+                }
             }
             .store(in: &cancellables)
     }
@@ -337,8 +414,10 @@ final class BoundaryDrawingViewController: UIViewController {
         }
         // Switching modes should clear any in-progress sketch so the nurse
         // doesn't end up with a half-freeform, half-polygon boundary.
+        // Use clearBoundaryKeepingMode so the mode set above is not
+        // overridden back to .tapPoint (Bug 1 fix).
         canvasView.clearAll()
-        viewModel.clearBoundary()
+        viewModel.clearBoundaryKeepingMode()
     }
 
     @objc private func undoTapped() {
@@ -348,6 +427,12 @@ final class BoundaryDrawingViewController: UIViewController {
     @objc private func clearTapped() {
         canvasView.clearAll()
         viewModel.clearBoundary()
+    }
+
+    @objc private func dismissErrorBanner() {
+        errorDismissTimer?.invalidate()
+        errorBanner.isHidden = true
+        viewModel.error = nil
     }
 
     @objc private func confirmTapped() {
@@ -385,16 +470,16 @@ extension BoundaryDrawingViewController: BoundaryCanvasDelegate {
 
     func canvasDidPlaceTapPoint(_ point: CGPoint) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        viewModel.didPlaceTapPoint(point, in: canvasView.bounds.size)
+        viewModel.didPlaceTapPoint(point, in: currentGeometry)
     }
 
     func canvasDidUpdateBoundary(_ points: [CGPoint]) {
-        viewModel.didUpdateBoundary(points, in: canvasView.bounds.size)
+        viewModel.didUpdateBoundary(points, in: currentGeometry)
     }
 
     func canvasDidFinalizeBoundary(_ points: [CGPoint]) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        viewModel.didFinalizeBoundary(points, in: canvasView.bounds.size)
+        viewModel.didFinalizeBoundary(points, in: currentGeometry)
     }
 
     func canvasDidClearBoundary() {

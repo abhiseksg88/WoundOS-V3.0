@@ -35,7 +35,11 @@ final class CaptureViewModel: ObservableObject {
 
     /// The underlying ARSession so the view controller can attach an ARSCNView.
     var arSession: ARSession? {
-        (captureProvider as? ARSessionManager)?.session
+        #if targetEnvironment(simulator)
+        return nil
+        #else
+        return (captureProvider as? ARSessionManager)?.session
+        #endif
     }
 
     /// True when all four strict gates are satisfied.

@@ -53,36 +53,40 @@ public final class VisionForegroundSegmenter: WoundSegmenter {
             throw SegmentationError.noForegroundDetected
         }
 
-        // 2. Pick the instance under the tap (or largest if tap missed)
-        let targetInstances = pickInstances(
-            observation: observation,
-            tapPoint: tapPoint,
-            imageSize: imageSize
-        )
-        guard !targetInstances.isEmpty else {
-            throw SegmentationError.tapPointMissedAllInstances
+        // 2. Use all detected instances — contour selection will pick the
+        //    blob nearest the tap. This avoids accessing the non-public
+        //    `instanceMask` property that crashes on iOS 17 (Bug 2 fix).
+        let instances = observation.allInstances
+        guard !instances.isEmpty else {
+            throw SegmentationError.noForegroundDetected
         }
 
-        // 3. Generate binary mask for that instance
+        // 3. Generate combined binary mask for all foreground instances
         let maskBuffer: CVPixelBuffer
         do {
             maskBuffer = try observation.generateScaledMaskForImage(
-                forInstances: targetInstances,
+                forInstances: instances,
                 from: handler
             )
         } catch {
             throw SegmentationError.maskGenerationFailed
         }
 
-        // 4. Extract contours from the mask
-        let contour = try extractLargestContour(
-            maskBuffer: maskBuffer,
+        // 4. Extract contours from the mask (shared with WoundAmbitSegmenter).
+        //    MaskContourExtractor.chooseBestContour picks the contour nearest
+        //    the tap point, so per-instance selection is unnecessary.
+        let contour = try MaskContourExtractor.extractContour(
+            from: maskBuffer,
             imageSize: imageSize,
             tapPoint: tapPoint
         )
 
         // 5. Simplify
         let simplified = ContourSimplifier.simplify(contour)
+
+        guard simplified.count >= 3 else {
+            throw SegmentationError.contourExtractionFailed
+        }
 
         // Confidence: Apple Vision's foreground request doesn't expose a
         // numeric confidence. We proxy it with the observation's overall
@@ -97,114 +101,4 @@ public final class VisionForegroundSegmenter: WoundSegmenter {
         )
     }
 
-    // MARK: - Instance Selection
-
-    /// Walk each detected instance's mask and return the one whose mask is
-    /// non-zero at the tap. Fall back to the largest instance if the tap
-    /// missed everything (common when the user taps near — but not on — the
-    /// object).
-    private func pickInstances(
-        observation: VNInstanceMaskObservation,
-        tapPoint: CGPoint,
-        imageSize: CGSize
-    ) -> IndexSet {
-        let instances = observation.allInstances
-        if instances.isEmpty {
-            return IndexSet()
-        }
-
-        // Sample the instance mask directly. Apple exposes the raw multi-
-        // class mask as a CVPixelBuffer with values 0=bg, 1..N=instance idx.
-        let buffer = observation.instanceMask
-        if let hitIndex = MaskSampler.instanceIndexAt(
-            buffer: buffer,
-            normalizedX: tapPoint.x / imageSize.width,
-            normalizedY: tapPoint.y / imageSize.height
-        ), hitIndex > 0 {
-            return IndexSet(integer: Int(hitIndex))
-        }
-
-        // Fallback: pick the largest instance by mask area.
-        var bestIdx: Int?
-        var bestArea = 0
-        for idx in instances {
-            let area = MaskSampler.area(buffer: buffer, instanceIndex: UInt8(idx))
-            if area > bestArea {
-                bestArea = area
-                bestIdx = idx
-            }
-        }
-        if let bestIdx {
-            return IndexSet(integer: bestIdx)
-        }
-        return IndexSet()
-    }
-
-    // MARK: - Contour Extraction
-
-    private func extractLargestContour(
-        maskBuffer: CVPixelBuffer,
-        imageSize: CGSize,
-        tapPoint: CGPoint
-    ) throws -> [CGPoint] {
-        let contoursRequest = VNDetectContoursRequest()
-        contoursRequest.contrastAdjustment = 1.0
-        contoursRequest.detectsDarkOnLight = false
-        contoursRequest.maximumImageDimension = 512
-
-        let handler = VNImageRequestHandler(cvPixelBuffer: maskBuffer, orientation: .up)
-        do {
-            try handler.perform([contoursRequest])
-        } catch {
-            throw SegmentationError.contourExtractionFailed
-        }
-
-        guard let obs = contoursRequest.results?.first else {
-            throw SegmentationError.contourExtractionFailed
-        }
-
-        // Flatten to a list of top-level contours. If multiple disconnected
-        // blobs exist, prefer the one containing the tap; otherwise the
-        // largest by bounding box area.
-        let topLevel = (0..<obs.topLevelContourCount).compactMap { i in
-            try? obs.topLevelContour(at: i)
-        }
-        guard !topLevel.isEmpty else {
-            throw SegmentationError.contourExtractionFailed
-        }
-
-        let tapNormalizedVision = CGPoint(
-            x: tapPoint.x / imageSize.width,
-            y: 1.0 - (tapPoint.y / imageSize.height) // Vision origin is bottom-left
-        )
-
-        let chosen = chooseBestContour(topLevel, tapNormalized: tapNormalizedVision)
-
-        // Convert Vision's normalized bottom-left coords → image pixel top-left
-        let pts = chosen.normalizedPoints.map { p -> CGPoint in
-            CGPoint(
-                x: CGFloat(p.x) * imageSize.width,
-                y: (1.0 - CGFloat(p.y)) * imageSize.height
-            )
-        }
-        return pts
-    }
-
-    private func chooseBestContour(
-        _ contours: [VNContour],
-        tapNormalized: CGPoint
-    ) -> VNContour {
-        // 1. Prefer the contour whose bounding box contains the tap.
-        for c in contours {
-            if c.normalizedPath.boundingBox.contains(tapNormalized) {
-                return c
-            }
-        }
-        // 2. Fall back to the largest by bounding box area.
-        return contours.max(by: { lhs, rhs in
-            let la = lhs.normalizedPath.boundingBox
-            let ra = rhs.normalizedPath.boundingBox
-            return (la.width * la.height) < (ra.width * ra.height)
-        })!
-    }
 }

@@ -147,7 +147,10 @@ extension ScanListViewController: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: ScanCell.reuseId, for: indexPath) as! ScanCell
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: ScanCell.reuseId, for: indexPath) as? ScanCell,
+              indexPath.row < viewModel.scans.count else {
+            return UITableViewCell()
+        }
         cell.configure(with: viewModel.scans[indexPath.row])
         return cell
     }

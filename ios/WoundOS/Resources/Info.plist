@@ -14,12 +14,14 @@
     <string>6.0</string>
     <key>CFBundleName</key>
     <string>$(PRODUCT_NAME)</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
     <string>3.0.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>4</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>UIApplicationSceneManifest</key>
@@ -42,8 +44,10 @@
     <key>UILaunchScreen</key>
     <dict>
         <key>UIColorName</key>
-        <string></string>
+        <string>SystemBackground</string>
     </dict>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>UIRequiredDeviceCapabilities</key>
     <array>
         <string>arkit</string>
@@ -56,5 +60,7 @@
     <string>WoundOS needs camera access to capture wound images using ARKit and LiDAR for clinical measurement.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>WoundOS may save wound images for clinical records.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>WoundOS saves captured wound scans to Photos when you choose to export.</string>
 </dict>
 </plist>

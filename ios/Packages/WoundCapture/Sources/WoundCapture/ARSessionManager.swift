@@ -11,7 +11,9 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
 
     // MARK: - Properties
 
+    #if !targetEnvironment(simulator)
     public let session = ARSession()
+    #endif
     private let configuration: CaptureSessionConfiguration
     private var currentFrame: ARFrame?
     private var meshAnchors: [ARMeshAnchor] = []
@@ -30,7 +32,11 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
     // MARK: - CaptureProviderProtocol
 
     public var isLiDARAvailable: Bool {
-        ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
+        #endif
     }
 
     public var isSessionActive: Bool {
@@ -46,7 +52,9 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
         self.configuration = configuration
         self.qualityMonitor = qualityMonitor
         super.init()
+        #if !targetEnvironment(simulator)
         session.delegate = self
+        #endif
     }
 
     // MARK: - Session Lifecycle
@@ -56,6 +64,7 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
             throw CaptureError.lidarNotAvailable
         }
 
+        #if !targetEnvironment(simulator)
         let config = ARWorldTrackingConfiguration()
         config.sceneReconstruction = .mesh
         config.frameSemantics = [.smoothedSceneDepth]
@@ -69,11 +78,14 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
         }
 
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        #endif
         qualityMonitor.reset()
     }
 
     public func pauseSession() {
+        #if !targetEnvironment(simulator)
         session.pause()
+        #endif
         qualityMonitor.reset()
     }
 
@@ -82,6 +94,9 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
     /// Freeze the current ARKit state and return a snapshot.
     /// All spatial data — RGB, depth, mesh, camera — is locked together.
     public func captureSnapshot() throws -> CaptureSnapshot {
+        #if targetEnvironment(simulator)
+        throw CaptureError.lidarNotAvailable
+        #else
         guard let frame = currentFrame else {
             throw CaptureError.noFrameAvailable
         }
@@ -128,6 +143,7 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
             deviceModel: deviceModelString(),
             timestamp: Date()
         )
+        #endif
     }
 
     // MARK: - RGB Extraction
@@ -301,6 +317,7 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
     }
 }
 
+#if !targetEnvironment(simulator)
 // MARK: - ARSessionDelegate
 
 extension ARSessionManager: ARSessionDelegate {
@@ -367,6 +384,7 @@ extension ARSessionManager: ARSessionDelegate {
         onTrackingStateChanged?(state)
     }
 }
+#endif
 
 // MARK: - Capture Errors
 

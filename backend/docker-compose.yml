@@ -1,0 +1,48 @@
+# Local development stack — run with: docker-compose up
+#
+# Starts PostgreSQL + the WoundOS API. No GCS/Pub/Sub needed locally
+# (falls back to filesystem storage and background task processing).
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: woundos
+      POSTGRES_USER: woundos
+      POSTGRES_PASSWORD: woundos_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U woundos"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=woundos
+      - DB_PASSWORD=woundos_dev
+      - DB_NAME=woundos
+      - GCS_PROJECT_ID=
+      - PUBSUB_PROJECT_ID=
+      - FIREBASE_PROJECT_ID=
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - JWT_SECRET_KEY=dev-secret-change-in-prod
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app  # Hot reload in dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+
+volumes:
+  pgdata:
