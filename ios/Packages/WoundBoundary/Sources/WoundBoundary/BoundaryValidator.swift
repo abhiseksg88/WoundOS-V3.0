@@ -103,9 +103,11 @@ public enum BoundaryValidator {
     // MARK: - Self-Intersection Check
 
     /// Check if any two non-adjacent edges of the polygon intersect.
+    /// Capped at 50 points to avoid O(n²) blowup — larger polygons
+    /// (typically from auto-segmentation) are assumed well-formed.
     static func isSelfIntersecting(_ points: [SIMD2<Float>]) -> Bool {
         let n = points.count
-        guard n >= 4 else { return false }
+        guard n >= 4, n <= 50 else { return false }
 
         for i in 0..<n {
             let a1 = points[i]

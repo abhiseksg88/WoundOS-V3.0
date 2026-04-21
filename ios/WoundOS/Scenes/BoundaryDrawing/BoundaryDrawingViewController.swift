@@ -391,8 +391,10 @@ final class BoundaryDrawingViewController: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] polygon in
                 guard let self else { return }
-                // 1. Show the detected boundary + bounding box on the canvas
-                self.canvasView.setBoundary(points: polygon)
+                // 1. Show the detected boundary on the canvas WITHOUT triggering
+                //    the delegate → didFinalizeBoundary → O(n²) validate chain.
+                //    autoFinalizeBoundary handles finalization with relaxed validation.
+                self.canvasView.setBoundary(points: polygon, notifyDelegate: false)
                 self.modeToggle.selectedSegmentIndex = 1
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
 

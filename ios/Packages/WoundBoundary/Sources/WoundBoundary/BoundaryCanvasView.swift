@@ -105,14 +105,19 @@ public final class BoundaryCanvasView: UIView {
     /// Moves the canvas into `.polygon` mode so the nurse can edit vertices.
     /// Does **not** re-fire `canvasDidPlaceTapPoint`; that has already been
     /// delivered by the tap that triggered segmentation.
-    public func setBoundary(points: [CGPoint], keepTapPoint: Bool = true) {
+    ///
+    /// Pass `notifyDelegate: false` when the caller will handle finalization
+    /// separately (e.g. auto-seg flow calls `autoFinalizeBoundary` instead).
+    public func setBoundary(points: [CGPoint], keepTapPoint: Bool = true, notifyDelegate: Bool = true) {
         guard points.count >= 3 else { return }
         if !keepTapPoint { tapPoint = nil }
         boundaryPoints = points
         isDrawingFreeform = false
         drawingMode = .polygon
         updateRendering()
-        delegate?.canvasDidFinalizeBoundary(boundaryPoints)
+        if notifyDelegate {
+            delegate?.canvasDidFinalizeBoundary(boundaryPoints)
+        }
     }
 
     /// Clear all drawn content and reset state
