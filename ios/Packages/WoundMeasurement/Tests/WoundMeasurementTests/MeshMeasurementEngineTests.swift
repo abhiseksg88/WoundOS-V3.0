@@ -114,7 +114,7 @@ final class MeshMeasurementEngineTests: XCTestCase {
             boundary: boundary,
             vertices: vertices,
             faces: faces,
-            normals: [],
+
             cameraIntrinsics: intrinsics,
             cameraTransform: transform,
             imageWidth: 1920,
@@ -205,7 +205,7 @@ final class MeshMeasurementEngineTests: XCTestCase {
             boundary: boundary,
             vertices: vertices,
             faces: faces,
-            normals: [],
+
             cameraIntrinsics: intrinsics,
             cameraTransform: transform,
             imageWidth: 1920,
@@ -266,7 +266,7 @@ final class MeshMeasurementEngineTests: XCTestCase {
             boundary: boundary,
             vertices: vertices,
             faces: faces,
-            normals: [],
+
             cameraIntrinsics: intrinsics,
             cameraTransform: transform,
             imageWidth: 1920,

@@ -45,9 +45,19 @@ final class BoundaryDrawingViewModel: ObservableObject {
     private var boundaryWasAutoSeeded = false
     private var segmenterModelId: String?
 
-    /// The captured RGB image for display
-    var capturedImage: UIImage? {
-        UIImage(data: snapshot.rgbImageData)
+    /// The captured RGB image for display, cached to avoid repeated JPEG decoding.
+    /// ARKit's pixel buffer is always landscape-right. Apply `.right`
+    /// orientation so UIImageView displays it in portrait.
+    lazy var capturedImage: UIImage? = {
+        guard let raw = UIImage(data: snapshot.rgbImageData),
+              let cg = raw.cgImage else { return nil }
+        return UIImage(cgImage: cg, scale: 1.0, orientation: .right)
+    }()
+
+    /// Raw landscape CGImage for passing to the segmenter (no orientation
+    /// rotation — Vision needs the raw sensor pixels).
+    private var rawCGImage: CGImage? {
+        UIImage(data: snapshot.rgbImageData)?.cgImage
     }
 
     var instructionText: String {
@@ -93,7 +103,7 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
     func didPlaceTapPoint(_ point: CGPoint, in geometry: ImageViewGeometry) {
         tapPoint = point
-        normalizedTapPoint = geometry.viewToImageNormalized(point)
+        normalizedTapPoint = geometry.viewToSensorNormalized(point)
 
         // In .auto mode, the tap is a point prompt for the segmenter. The VC
         // subscribes to `autoSegmentationResult` and seeds the canvas with
@@ -108,40 +118,28 @@ final class BoundaryDrawingViewModel: ObservableObject {
     // MARK: - Auto Segmentation
 
     func runAutoSegmentation(tapPoint: CGPoint, geometry: ImageViewGeometry) {
+        CrashLogger.shared.log("Auto-segmentation requested at tap=\(tapPoint)", category: .segmentation)
         guard let segmenter else {
+            CrashLogger.shared.error("No segmenter available", category: .segmentation)
             error = "Auto-detect is not available on this device."
             return
         }
-        guard let image = capturedImage else {
+        // Use the raw landscape CGImage — Vision needs sensor-oriented pixels.
+        guard let cgImage = rawCGImage else {
+            CrashLogger.shared.error("rawCGImage is nil — cannot segment", category: .segmentation)
             error = "Captured image is unavailable."
             return
         }
 
-        // Ensure CGImage pixels match the displayed orientation (Bug 5).
-        // UIImage may carry EXIF orientation that cgImage doesn't reflect.
-        let cgImage: CGImage
-        if image.imageOrientation == .up, let cg = image.cgImage {
-            cgImage = cg
-        } else {
-            // Render to a new CGImage with orientation pre-applied
-            let renderer = UIGraphicsImageRenderer(size: image.size)
-            let rendered = renderer.image { _ in
-                image.draw(in: CGRect(origin: .zero, size: image.size))
-            }
-            guard let cg = rendered.cgImage else {
-                error = "Captured image is unavailable."
-                return
-            }
-            cgImage = cg
-        }
-
-        // Convert tap from view-local coords to image pixel coords using
-        // the geometry's fitted rect (accounts for .scaleAspectFit letterboxing).
+        // Convert tap from view-local coords to sensor pixel coords,
+        // accounting for portrait display → landscape sensor rotation.
         guard geometry.fittedRect.contains(tapPoint) else {
+            CrashLogger.shared.log("Tap outside image area: \(tapPoint) not in \(geometry.fittedRect)", category: .segmentation, level: .warning)
             error = "Tap inside the image area."
             return
         }
-        let imageTap = geometry.viewPointToImagePoint(tapPoint)
+        let sensorTap = geometry.viewToSensorPixel(tapPoint)
+        CrashLogger.shared.log("Sensor tap coords: \(sensorTap), image: \(cgImage.width)x\(cgImage.height)", category: .segmentation)
 
         isAutoSegmenting = true
         Task { @MainActor in
@@ -149,16 +147,18 @@ final class BoundaryDrawingViewModel: ObservableObject {
             do {
                 let result = try await segmenter.segment(
                     image: cgImage,
-                    tapPoint: imageTap
+                    tapPoint: sensorTap
                 )
-                // Project polygon back into view-local coords for the canvas.
-                let viewPolygon = result.polygonImageSpace.map { p in
-                    geometry.imagePointToViewPoint(p)
+                CrashLogger.shared.log("Segmentation success: \(result.polygonImageSpace.count) polygon points, model=\(result.modelIdentifier)", category: .segmentation)
+                // Project polygon from sensor pixels back to view-local coords.
+                let viewPolygon = result.polygonImageSpace.map { sensorPt in
+                    geometry.sensorPixelToViewPoint(sensorPt)
                 }
                 boundaryWasAutoSeeded = true
                 segmenterModelId = result.modelIdentifier
                 autoSegmentationResult.send(viewPolygon)
             } catch {
+                CrashLogger.shared.error("Auto-segmentation failed", category: .segmentation, error: error)
                 self.error = "Segmentation failed: \(error.localizedDescription)"
             }
         }
@@ -167,20 +167,33 @@ final class BoundaryDrawingViewModel: ObservableObject {
     // MARK: - Boundary Updates
 
     func didUpdateBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
-        normalizedBoundaryPoints = points.map { geometry.viewToImageNormalized($0) }
+        normalizedBoundaryPoints = points.map { geometry.viewToSensorNormalized($0) }
+        // Enable Measure as soon as polygon has 3+ points — the measurement
+        // pipeline auto-closes the polygon. This avoids requiring the user
+        // to tap near the first vertex to "close" the polygon.
+        if drawingMode == .polygon && normalizedBoundaryPoints.count >= 3 {
+            boundaryFinalized = true
+        }
     }
 
     func didFinalizeBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
-        normalizedBoundaryPoints = points.map { geometry.viewToImageNormalized($0) }
+        CrashLogger.shared.log("Boundary finalized with \(points.count) view-space points", category: .boundary)
+        normalizedBoundaryPoints = points.map { geometry.viewToSensorNormalized($0) }
 
         // Enable Measure as soon as we have a valid polygon (Bug 3).
         // Validation is non-blocking — shown as warnings only.
         if normalizedBoundaryPoints.count >= 3 {
             boundaryFinalized = true
+            CrashLogger.shared.log("Boundary valid — \(normalizedBoundaryPoints.count) normalized points", category: .boundary)
+        } else {
+            CrashLogger.shared.log("Boundary too few points: \(normalizedBoundaryPoints.count)", category: .boundary, level: .warning)
         }
 
         let result = BoundaryValidator.validate(points: normalizedBoundaryPoints)
         validationErrors = result.errors
+        if !result.errors.isEmpty {
+            CrashLogger.shared.log("Boundary validation warnings: \(result.errors.map(\.localizedDescription))", category: .boundary, level: .warning)
+        }
     }
 
     /// Auto-finalize an auto-segmented boundary with relaxed validation.
@@ -188,7 +201,7 @@ final class BoundaryDrawingViewModel: ObservableObject {
     /// skip strict self-intersection and area checks that can false-positive
     /// on machine-generated contours.
     func autoFinalizeBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
-        normalizedBoundaryPoints = points.map { geometry.viewToImageNormalized($0) }
+        normalizedBoundaryPoints = points.map { geometry.viewToSensorNormalized($0) }
 
         guard normalizedBoundaryPoints.count >= 3 else {
             validationErrors = [.tooFewPoints(count: normalizedBoundaryPoints.count)]
@@ -230,15 +243,32 @@ final class BoundaryDrawingViewModel: ObservableObject {
         exudateAmount: ExudateAmount,
         tissueType: TissueType
     ) {
-        guard boundaryFinalized else { return }
+        guard boundaryFinalized else {
+            CrashLogger.shared.log("computeMeasurements called but boundary not finalized", category: .measurement, level: .warning)
+            return
+        }
+        CrashLogger.shared.log("Starting measurement pipeline — \(normalizedBoundaryPoints.count) boundary points", category: .measurement)
         isComputing = true
 
         Task { @MainActor in
             do {
                 // 1. Build CaptureData from snapshot
+                CrashLogger.shared.log("Step 1: Building CaptureData from snapshot", category: .measurement)
                 let captureData = buildCaptureData()
+                CrashLogger.shared.logDiagnostics("CaptureData", category: .measurement, data: [
+                    "vertexCount": captureData.vertexCount,
+                    "faceCount": captureData.faceCount,
+                    "imageWidth": captureData.imageWidth,
+                    "imageHeight": captureData.imageHeight,
+                    "depthWidth": captureData.depthWidth,
+                    "depthHeight": captureData.depthHeight,
+                    "meshVerticesDataSize": captureData.meshVerticesData.count,
+                    "meshFacesDataSize": captureData.meshFacesData.count,
+                    "depthMapDataSize": captureData.depthMapData.count,
+                ])
 
                 // 2. Project 2D boundary onto 3D mesh (with confidence filtering)
+                CrashLogger.shared.log("Step 2: Projecting 2D boundary → 3D mesh", category: .boundary)
                 let projection = try BoundaryProjector.project(
                     points2D: normalizedBoundaryPoints,
                     imageWidth: snapshot.imageWidth,
@@ -252,12 +282,18 @@ final class BoundaryDrawingViewModel: ObservableObject {
                     depthHeight: snapshot.depthHeight,
                     confidenceMap: snapshot.confidenceMap
                 )
+                CrashLogger.shared.logDiagnostics("Projection Result", category: .boundary, data: [
+                    "projectedPoints": projection.projectedPoints3D.count,
+                    "meshHitRate": String(format: "%.2f", projection.meshHitRate),
+                    "meanDepthConfidence": String(format: "%.2f", projection.meanDepthConfidence),
+                ])
 
                 // 3. Build boundary model.
                 // An auto-seeded boundary keeps its `.autoVision` source even
                 // if the nurse then hand-edited vertices — this matches the
                 // audit-trail design (all AI-assisted boundaries are flagged).
                 let source: BoundarySource = boundaryWasAutoSeeded ? .autoVision : .nurseDrawn
+                CrashLogger.shared.log("Step 3: Building WoundBoundary (source=\(source), mode=\(drawingMode))", category: .boundary)
                 let boundary = WoundBoundary(
                     boundaryType: drawingMode == .freeform ? .freeform : .polygon,
                     source: source,
@@ -286,21 +322,35 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 )
 
                 // 4. Run measurement engine — passes camera params + quality
+                CrashLogger.shared.log("Step 4: Running MeshMeasurementEngine.measure()", category: .measurement)
                 let measurement = try measurementEngine.measure(
                     captureData: captureData,
                     boundary: boundary,
                     qualityScore: combinedQuality
                 )
+                CrashLogger.shared.logDiagnostics("Measurement Output", category: .measurement, data: [
+                    "areaCm2": measurement.areaCm2,
+                    "lengthMm": measurement.lengthMm,
+                    "widthMm": measurement.widthMm,
+                    "maxDepthMm": measurement.maxDepthMm,
+                    "meanDepthMm": measurement.meanDepthMm,
+                    "volumeMl": measurement.volumeMl,
+                    "perimeterMm": measurement.perimeterMm,
+                    "processingTimeMs": measurement.processingTimeMs,
+                ])
 
                 // 5. Compute PUSH score
+                CrashLogger.shared.log("Step 5: Computing PUSH score", category: .measurement)
                 let pushScore = PUSHScoreCalculator.computeScore(
                     lengthMm: measurement.lengthMm,
                     widthMm: measurement.widthMm,
                     exudateAmount: exudateAmount,
                     tissueType: tissueType
                 )
+                CrashLogger.shared.log("PUSH score: \(pushScore.totalScore)", category: .measurement)
 
                 // 6. Assemble WoundScan
+                CrashLogger.shared.log("Step 6: Assembling WoundScan", category: .measurement)
                 let scan = WoundScan(
                     patientId: patientId,
                     nurseId: nurseId,
@@ -313,10 +363,12 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 )
 
                 isComputing = false
+                CrashLogger.shared.log("Measurement pipeline completed successfully", category: .measurement)
                 onMeasurementComplete?(scan)
 
             } catch {
                 isComputing = false
+                CrashLogger.shared.error("Measurement pipeline FAILED", category: .measurement, error: error)
                 self.error = "Measurement failed: \(error.localizedDescription)"
             }
         }
@@ -336,29 +388,44 @@ final class BoundaryDrawingViewModel: ObservableObject {
     // MARK: - Build CaptureData
 
     private func buildCaptureData() -> CaptureData {
-        // Pack vertices into Data
+        CrashLogger.shared.log("buildCaptureData: vertices=\(snapshot.vertices.count) faces=\(snapshot.faces.count) normals=\(snapshot.normals.count)", category: .measurement)
+        // Pack vertices into Data — extract x,y,z individually.
+        // SIMD3<Float> has 16-byte stride (backed by SIMD4 storage),
+        // but CaptureData.unpackVertices() expects tightly-packed
+        // 12-byte (3 × Float) triples. Using withUnsafeBytes(of:)
+        // on the whole SIMD3 would write 16 bytes including padding.
         var verticesData = Data()
+        verticesData.reserveCapacity(snapshot.vertices.count * 12)
         for v in snapshot.vertices {
-            var vertex = v
-            withUnsafeBytes(of: &vertex) { verticesData.append(contentsOf: $0) }
+            var x = v.x; var y = v.y; var z = v.z
+            withUnsafeBytes(of: &x) { verticesData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &y) { verticesData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &z) { verticesData.append(contentsOf: $0) }
         }
 
-        // Pack faces into Data
+        // Pack faces — same SIMD3<UInt32> padding issue.
         var facesData = Data()
+        facesData.reserveCapacity(snapshot.faces.count * 12)
         for f in snapshot.faces {
-            var face = f
-            withUnsafeBytes(of: &face) { facesData.append(contentsOf: $0) }
+            var x = f.x; var y = f.y; var z = f.z
+            withUnsafeBytes(of: &x) { facesData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &y) { facesData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &z) { facesData.append(contentsOf: $0) }
         }
 
-        // Pack normals into Data
+        // Pack normals — same SIMD3<Float> padding issue.
         var normalsData = Data()
+        normalsData.reserveCapacity(snapshot.normals.count * 12)
         for n in snapshot.normals {
-            var normal = n
-            withUnsafeBytes(of: &normal) { normalsData.append(contentsOf: $0) }
+            var x = n.x; var y = n.y; var z = n.z
+            withUnsafeBytes(of: &x) { normalsData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &y) { normalsData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &z) { normalsData.append(contentsOf: $0) }
         }
 
-        // Pack depth map into Data
+        // Pack depth map into Data (Float is 4 bytes — no padding issue)
         var depthData = Data()
+        depthData.reserveCapacity(snapshot.depthMap.count * 4)
         for d in snapshot.depthMap {
             var depth = d
             withUnsafeBytes(of: &depth) { depthData.append(contentsOf: $0) }

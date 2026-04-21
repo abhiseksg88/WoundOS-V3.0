@@ -15,7 +15,7 @@ public enum SnapshotSerializer {
         // 1. RGB image (JPEG)
         parts.append(MultipartPart(
             name: "rgb_image",
-            filename: "\(scan.id.uuidString).jpg",
+            filename: "rgb.jpg",
             mimeType: "image/jpeg",
             data: scan.captureData.rgbImageData
         ))
@@ -44,24 +44,36 @@ public enum SnapshotSerializer {
         ))
 
         // 4. Metadata JSON
+        let qualityScore: QualityScoreData? = scan.primaryMeasurement.qualityScore.map { q in
+            QualityScoreData(
+                trackingStableSeconds: q.trackingStableSeconds,
+                captureDistanceM: q.captureDistanceM,
+                meshVertexCount: q.meshVertexCount,
+                meanDepthConfidence: q.meanDepthConfidence,
+                meshHitRate: q.meshHitRate,
+                angularVelocityRadPerSec: q.angularVelocityRadPerSec
+            )
+        }
+
         let metadata = ScanUploadMetadata(
             scanId: scan.id.uuidString,
             patientId: scan.patientId,
             nurseId: scan.nurseId,
             facilityId: scan.facilityId,
             capturedAt: scan.capturedAt,
-            cameraIntrinsics: scan.captureData.cameraIntrinsics,
-            cameraTransform: scan.captureData.cameraTransform,
+            cameraIntrinsics: scan.captureData.cameraIntrinsics.map { Double($0) },
+            cameraTransform: scan.captureData.cameraTransform.map { Double($0) },
             imageWidth: scan.captureData.imageWidth,
             imageHeight: scan.captureData.imageHeight,
             depthWidth: scan.captureData.depthWidth,
             depthHeight: scan.captureData.depthHeight,
             deviceModel: scan.captureData.deviceModel,
             lidarAvailable: scan.captureData.lidarAvailable,
-            boundaryPoints2D: scan.nurseBoundary.points2D.map { [$0.x, $0.y] },
+            boundaryPoints2d: scan.nurseBoundary.points2D.map { [Double($0.x), Double($0.y)] },
             boundaryType: scan.nurseBoundary.boundaryType.rawValue,
-            tapPoint: scan.nurseBoundary.tapPoint.map { [$0.x, $0.y] },
-            primaryMeasurement: MeasurementPayload(
+            boundarySource: scan.nurseBoundary.source.rawValue,
+            tapPoint: scan.nurseBoundary.tapPoint.map { [Double($0.x), Double($0.y)] },
+            primaryMeasurement: MeasurementData(
                 areaCm2: scan.primaryMeasurement.areaCm2,
                 maxDepthMm: scan.primaryMeasurement.maxDepthMm,
                 meanDepthMm: scan.primaryMeasurement.meanDepthMm,
@@ -71,12 +83,13 @@ public enum SnapshotSerializer {
                 perimeterMm: scan.primaryMeasurement.perimeterMm,
                 processingTimeMs: scan.primaryMeasurement.processingTimeMs
             ),
-            pushScore: PUSHPayload(
+            pushScore: PushScoreData(
                 lengthTimesWidthCm2: scan.pushScore.lengthTimesWidthCm2,
                 exudateAmount: scan.pushScore.exudateAmount.rawValue,
                 tissueType: scan.pushScore.tissueType.rawValue,
                 totalScore: scan.pushScore.totalScore
-            )
+            ),
+            qualityScore: qualityScore
         )
 
         let metadataJSON = try JSONEncoder.woundOS.encode(metadata)
@@ -116,11 +129,9 @@ public enum SnapshotSerializer {
         let mantissa = bits & 0x7FFFFF
 
         if exponent > 15 {
-            // Overflow → Infinity
-            return (sign << 15) | 0x7C00
+            return (sign << 15) | 0x7C00 // Overflow → Infinity
         } else if exponent < -14 {
-            // Underflow → 0
-            return sign << 15
+            return sign << 15 // Underflow → 0
         } else {
             let f16Exp = UInt16(exponent + 15)
             let f16Man = UInt16(mantissa >> 13)
@@ -152,60 +163,26 @@ public enum SnapshotSerializer {
     }
 }
 
-// MARK: - Upload Metadata
-
-struct ScanUploadMetadata: Codable {
-    let scanId: String
-    let patientId: String
-    let nurseId: String
-    let facilityId: String
-    let capturedAt: Date
-    let cameraIntrinsics: [Float]
-    let cameraTransform: [Float]
-    let imageWidth: Int
-    let imageHeight: Int
-    let depthWidth: Int
-    let depthHeight: Int
-    let deviceModel: String
-    let lidarAvailable: Bool
-    let boundaryPoints2D: [[Float]]
-    let boundaryType: String
-    let tapPoint: [Float]?
-    let primaryMeasurement: MeasurementPayload
-    let pushScore: PUSHPayload
-}
-
-struct MeasurementPayload: Codable {
-    let areaCm2: Double
-    let maxDepthMm: Double
-    let meanDepthMm: Double
-    let volumeMl: Double
-    let lengthMm: Double
-    let widthMm: Double
-    let perimeterMm: Double
-    let processingTimeMs: Int
-}
-
-struct PUSHPayload: Codable {
-    let lengthTimesWidthCm2: Double
-    let exudateAmount: String
-    let tissueType: String
-    let totalScore: Int
-}
-
 // MARK: - Multipart Part
 
-public struct MultipartPart {
+public struct MultipartPart: Sendable {
     public let name: String
     public let filename: String
     public let mimeType: String
     public let data: Data
+
+    public init(name: String, filename: String, mimeType: String, data: Data) {
+        self.name = name
+        self.filename = filename
+        self.mimeType = mimeType
+        self.data = data
+    }
 }
 
-// MARK: - JSON Encoder
+// MARK: - JSON Coders
 
 extension JSONEncoder {
-    static let woundOS: JSONEncoder = {
+    public static let woundOS: JSONEncoder = {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -214,7 +191,7 @@ extension JSONEncoder {
 }
 
 extension JSONDecoder {
-    static let woundOS: JSONDecoder = {
+    public static let woundOS: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         decoder.keyDecodingStrategy = .convertFromSnakeCase

@@ -131,7 +131,7 @@ final class BoundaryDrawingViewController: UIViewController {
     private var errorDismissTimer: Timer?
 
     /// Cached geometry recomputed every layout pass (Bug 4).
-    private var currentGeometry = ImageViewGeometry(imageSize: .zero, viewSize: .zero)
+    private var currentGeometry = ImageViewGeometry(sensorSize: .zero, displayedSize: .zero, viewSize: .zero)
 
     private lazy var activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
@@ -199,12 +199,17 @@ final class BoundaryDrawingViewController: UIViewController {
         super.viewDidLayoutSubviews()
         // Recompute geometry every layout pass so coordinate conversion
         // always uses the current view/image relationship (Bug 4).
-        let imageSize = CGSize(
+        //
+        // sensorSize = raw landscape buffer dimensions (for BoundaryProjector).
+        // displayedSize = UIImage.size with .right orientation (portrait).
+        let sensorSize = CGSize(
             width: viewModel.snapshot.imageWidth,
             height: viewModel.snapshot.imageHeight
         )
+        let displayedSize = viewModel.capturedImage?.size ?? sensorSize
         currentGeometry = ImageViewGeometry(
-            imageSize: imageSize,
+            sensorSize: sensorSize,
+            displayedSize: displayedSize,
             viewSize: canvasView.bounds.size
         )
     }
@@ -319,7 +324,7 @@ final class BoundaryDrawingViewController: UIViewController {
             }
             .store(in: &cancellables)
 
-        // Real errors → red banner with auto-dismiss (Bug 6)
+        // Real errors → red banner with auto-dismiss + haptic (Bug 6)
         viewModel.$error
             .receive(on: DispatchQueue.main)
             .sink { [weak self] errorMessage in
@@ -327,9 +332,10 @@ final class BoundaryDrawingViewController: UIViewController {
                 self.errorDismissTimer?.invalidate()
                 if let message = errorMessage, !message.isEmpty {
                     self.errorBanner.isHidden = false
-                    self.errorBanner.text = "  " + message + "  "
+                    self.errorBanner.text = "  \(message). Try Polygon or Freeform.  "
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
                     self.errorDismissTimer = Timer.scheduledTimer(
-                        withTimeInterval: 5.0, repeats: false
+                        withTimeInterval: 6.0, repeats: false
                     ) { [weak self] _ in
                         self?.dismissErrorBanner()
                     }
@@ -406,12 +412,17 @@ final class BoundaryDrawingViewController: UIViewController {
     // MARK: - Actions
 
     @objc private func modeChanged() {
+        let mode: DrawingMode
         switch modeToggle.selectedSegmentIndex {
-        case 0: viewModel.drawingMode = .auto
-        case 1: viewModel.drawingMode = .polygon
-        case 2: viewModel.drawingMode = .freeform
-        default: break
+        case 0: mode = .auto
+        case 1: mode = .polygon
+        case 2: mode = .freeform
+        default: return
         }
+        // Set mode on both VM and canvas SYNCHRONOUSLY to eliminate the
+        // race between the Combine binding (async) and the next touch event.
+        viewModel.drawingMode = mode
+        canvasView.drawingMode = mode
         // Switching modes should clear any in-progress sketch so the nurse
         // doesn't end up with a half-freeform, half-polygon boundary.
         // Use clearBoundaryKeepingMode so the mode set above is not

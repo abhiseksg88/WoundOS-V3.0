@@ -17,7 +17,7 @@ public final class UploadManager: ObservableObject {
 
     // MARK: - Dependencies
 
-    private let apiClient: APIClient
+    private let client: WoundOSClient
     private let storage: StorageProviderProtocol
     private let maxRetries = 4
     private let baseRetryDelay: TimeInterval = 2.0
@@ -25,8 +25,8 @@ public final class UploadManager: ObservableObject {
     private var uploadQueue: [UUID] = []
     private var isProcessingQueue = false
 
-    public init(apiClient: APIClient, storage: StorageProviderProtocol) {
-        self.apiClient = apiClient
+    public init(client: WoundOSClient, storage: StorageProviderProtocol) {
+        self.client = client
         self.storage = storage
     }
 
@@ -37,7 +37,6 @@ public final class UploadManager: ObservableObject {
         uploadQueue.append(scan.id)
         pendingUploads = uploadQueue
 
-        // Update scan status
         var updatedScan = scan
         updatedScan.uploadStatus = .uploading
         try? await storage.updateScan(updatedScan)
@@ -71,7 +70,6 @@ public final class UploadManager: ObservableObject {
 
                 try await uploadWithRetry(scan: scan)
 
-                // Success — update status
                 var uploaded = scan
                 uploaded.uploadStatus = .uploaded
                 try await storage.updateScan(uploaded)
@@ -85,12 +83,10 @@ public final class UploadManager: ObservableObject {
                 }
 
             } catch {
-                // Move to failed
                 uploadQueue.removeFirst()
                 failedUploads[scanId] = error
                 pendingUploads = uploadQueue
 
-                // Update scan status
                 if var scan = try? await storage.fetchScan(id: scanId) {
                     scan.uploadStatus = .failed
                     try? await storage.updateScan(scan)
@@ -106,7 +102,7 @@ public final class UploadManager: ObservableObject {
 
     private func uploadWithRetry(scan: WoundScan, attempt: Int = 0) async throws {
         do {
-            _ = try await apiClient.uploadScan(scan)
+            _ = try await client.uploadScan(scan)
         } catch {
             if attempt < maxRetries {
                 let delay = baseRetryDelay * pow(2.0, Double(attempt))
@@ -121,27 +117,45 @@ public final class UploadManager: ObservableObject {
     // MARK: - Poll for Backend Completion
 
     /// Poll the backend until shadow validation is complete.
-    /// Checks every 5 seconds, up to 60 seconds.
+    /// Checks every 5 seconds, up to 90 seconds (18 attempts).
+    /// Handles "failed" status and surfaces timeout.
     private func pollForCompletion(scanId: UUID) async {
-        let maxAttempts = 12
-        let pollInterval: UInt64 = 5_000_000_000 // 5 seconds
+        let maxAttempts = 18  // 18 × 5s = 90s
+        let pollInterval: UInt64 = 5_000_000_000
 
         for _ in 0..<maxAttempts {
             try? await Task.sleep(nanoseconds: pollInterval)
 
             do {
-                let status = try await apiClient.checkScanStatus(id: scanId.uuidString)
+                let status = try await client.getScanStatus(id: scanId)
 
-                if status.processingStatus == "completed" {
-                    // Fetch the full updated scan from backend
-                    let updatedScan = try await apiClient.fetchScan(id: scanId.uuidString)
-                    try await storage.updateScan(updatedScan)
+                switch status.processingStatus {
+                case "completed":
+                    if var localScan = try? await storage.fetchScan(id: scanId) {
+                        localScan.uploadStatus = .processed
+                        try? await storage.updateScan(localScan)
+                    }
                     return
+
+                case "failed":
+                    if var localScan = try? await storage.fetchScan(id: scanId) {
+                        localScan.uploadStatus = .failed
+                        try? await storage.updateScan(localScan)
+                    }
+                    return
+
+                default:
+                    continue
                 }
             } catch {
-                // Network error during polling — scan is safely on backend, skip
-                continue
+                continue // Network error during polling — scan is safely on backend
             }
+        }
+
+        // Timed out — surface as failed
+        if var localScan = try? await storage.fetchScan(id: scanId) {
+            localScan.uploadStatus = .failed
+            try? await storage.updateScan(localScan)
         }
     }
 }

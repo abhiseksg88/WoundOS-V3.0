@@ -183,6 +183,34 @@ public final class BoundaryCanvasView: UIView {
         guard drawingMode == .freeform, isDrawingFreeform else { return }
         isDrawingFreeform = false
 
+        guard boundaryPoints.count >= 3 else {
+            // Too few points for a valid boundary — clear and let user retry
+            boundaryPoints.removeAll()
+            updateRendering()
+            return
+        }
+
+        // Auto-close the loop: if the last point is far from the first,
+        // connect back so the enclosed area matches what was drawn.
+        // Without this, the path.close() draws a straight line from the
+        // lift-off point to the start, causing the boundary to "expand."
+        if let first = boundaryPoints.first, let last = boundaryPoints.last {
+            let gap = first.distance(to: last)
+            if gap > closeProximityThreshold {
+                // Walk back toward the start by sampling intermediate points
+                // along the straight line to avoid a sudden gap.
+                let steps = max(2, Int(gap / 8.0))
+                for i in 1...steps {
+                    let t = CGFloat(i) / CGFloat(steps)
+                    let midPoint = CGPoint(
+                        x: last.x + (first.x - last.x) * t,
+                        y: last.y + (first.y - last.y) * t
+                    )
+                    boundaryPoints.append(midPoint)
+                }
+            }
+        }
+
         // Simplify the freeform path using Douglas-Peucker
         let simplified = douglasPeucker(boundaryPoints, epsilon: simplificationEpsilon)
         boundaryPoints = simplified

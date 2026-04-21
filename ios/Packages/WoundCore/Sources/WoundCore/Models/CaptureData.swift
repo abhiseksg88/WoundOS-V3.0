@@ -101,7 +101,7 @@ extension CaptureData {
 
     /// Reconstruct the 3×3 intrinsics matrix from stored column-major floats.
     public var intrinsicsMatrix: simd_float3x3 {
-        precondition(cameraIntrinsics.count == 9)
+        guard cameraIntrinsics.count == 9 else { return matrix_identity_float3x3 }
         return simd_float3x3(
             SIMD3<Float>(cameraIntrinsics[0], cameraIntrinsics[1], cameraIntrinsics[2]),
             SIMD3<Float>(cameraIntrinsics[3], cameraIntrinsics[4], cameraIntrinsics[5]),
@@ -111,7 +111,7 @@ extension CaptureData {
 
     /// Reconstruct the 4×4 camera transform from stored column-major floats.
     public var transformMatrix: simd_float4x4 {
-        precondition(cameraTransform.count == 16)
+        guard cameraTransform.count == 16 else { return matrix_identity_float4x4 }
         return simd_float4x4(
             SIMD4<Float>(cameraTransform[0], cameraTransform[1], cameraTransform[2], cameraTransform[3]),
             SIMD4<Float>(cameraTransform[4], cameraTransform[5], cameraTransform[6], cameraTransform[7]),
@@ -121,52 +121,69 @@ extension CaptureData {
     }
 
     /// Unpack mesh vertices from binary data into an array of 3D points.
+    /// Returns empty array if data is inconsistent (prevents precondition crash).
     public func unpackVertices() -> [SIMD3<Float>] {
-        let floats = meshVerticesData.withUnsafeBytes { buffer in
-            Array(buffer.bindMemory(to: Float.self))
-        }
-        precondition(floats.count == vertexCount * 3)
+        guard meshVerticesData.count == vertexCount * 12 else { return [] }
         var vertices = [SIMD3<Float>]()
         vertices.reserveCapacity(vertexCount)
-        for i in stride(from: 0, to: floats.count, by: 3) {
-            vertices.append(SIMD3<Float>(floats[i], floats[i + 1], floats[i + 2]))
+        meshVerticesData.withUnsafeBytes { raw in
+            for i in 0..<vertexCount {
+                let offset = i * 12
+                let x = raw.load(fromByteOffset: offset, as: Float.self)
+                let y = raw.load(fromByteOffset: offset + 4, as: Float.self)
+                let z = raw.load(fromByteOffset: offset + 8, as: Float.self)
+                vertices.append(SIMD3<Float>(x, y, z))
+            }
         }
         return vertices
     }
 
     /// Unpack mesh faces from binary data into an array of index triples.
+    /// Returns empty array if data is inconsistent (prevents precondition crash).
     public func unpackFaces() -> [SIMD3<UInt32>] {
-        let indices = meshFacesData.withUnsafeBytes { buffer in
-            Array(buffer.bindMemory(to: UInt32.self))
-        }
-        precondition(indices.count == faceCount * 3)
+        guard meshFacesData.count == faceCount * 12 else { return [] }
         var faces = [SIMD3<UInt32>]()
         faces.reserveCapacity(faceCount)
-        for i in stride(from: 0, to: indices.count, by: 3) {
-            faces.append(SIMD3<UInt32>(indices[i], indices[i + 1], indices[i + 2]))
+        meshFacesData.withUnsafeBytes { raw in
+            for i in 0..<faceCount {
+                let offset = i * 12
+                let i0 = raw.load(fromByteOffset: offset, as: UInt32.self)
+                let i1 = raw.load(fromByteOffset: offset + 4, as: UInt32.self)
+                let i2 = raw.load(fromByteOffset: offset + 8, as: UInt32.self)
+                faces.append(SIMD3<UInt32>(i0, i1, i2))
+            }
         }
         return faces
     }
 
     /// Unpack mesh normals from binary data.
+    /// Returns empty array if data is inconsistent (prevents precondition crash).
     public func unpackNormals() -> [SIMD3<Float>] {
-        let floats = meshNormalsData.withUnsafeBytes { buffer in
-            Array(buffer.bindMemory(to: Float.self))
-        }
-        precondition(floats.count == vertexCount * 3)
+        guard meshNormalsData.count == vertexCount * 12 else { return [] }
         var normals = [SIMD3<Float>]()
         normals.reserveCapacity(vertexCount)
-        for i in stride(from: 0, to: floats.count, by: 3) {
-            normals.append(SIMD3<Float>(floats[i], floats[i + 1], floats[i + 2]))
+        meshNormalsData.withUnsafeBytes { raw in
+            for i in 0..<vertexCount {
+                let offset = i * 12
+                let x = raw.load(fromByteOffset: offset, as: Float.self)
+                let y = raw.load(fromByteOffset: offset + 4, as: Float.self)
+                let z = raw.load(fromByteOffset: offset + 8, as: Float.self)
+                normals.append(SIMD3<Float>(x, y, z))
+            }
         }
         return normals
     }
 
-    /// Unpack depth map into a 2D array of Float values (meters).
+    /// Unpack depth map into a flat array of Float values (meters).
     public func unpackDepthMap() -> [Float] {
-        meshVerticesData.withUnsafeBytes { _ in () } // no-op, just for symmetry
-        return depthMapData.withUnsafeBytes { buffer in
-            Array(buffer.bindMemory(to: Float.self))
+        guard depthMapData.count >= depthWidth * depthHeight * 4 else { return [] }
+        return depthMapData.withUnsafeBytes { raw in
+            var values = [Float]()
+            values.reserveCapacity(depthWidth * depthHeight)
+            for i in 0..<(depthWidth * depthHeight) {
+                values.append(raw.load(fromByteOffset: i * 4, as: Float.self))
+            }
+            return values
         }
     }
 }

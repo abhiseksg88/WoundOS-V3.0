@@ -190,10 +190,11 @@ public enum DimensionCalculator {
         _ points: [SIMD3<Float>],
         direction: SIMD3<Float>
     ) -> (SIMD3<Float>, SIMD3<Float>) {
+        guard let first = points.first else { return (.zero, .zero) }
         var minProj: Float = .greatestFiniteMagnitude
         var maxProj: Float = -.greatestFiniteMagnitude
-        var minPoint = points[0]
-        var maxPoint = points[0]
+        var minPoint = first
+        var maxPoint = first
 
         for p in points {
             let proj = simd_dot(p, direction)
@@ -214,8 +215,15 @@ public enum DimensionCalculator {
 
     /// Simple diameter-based dimension computation when convex hull fails.
     private static func simpleDimensions(_ points: [SIMD3<Float>]) -> DimensionResult {
+        guard let first = points.first else {
+            return DimensionResult(
+                lengthMm: 0, widthMm: 0,
+                lengthEndpoints: (.zero, .zero),
+                widthEndpoints: (.zero, .zero)
+            )
+        }
         var maxDist: Float = 0
-        var p1 = points[0], p2 = points[0]
+        var p1 = first, p2 = first
 
         for i in 0..<points.count {
             for j in (i + 1)..<points.count {
@@ -229,9 +237,10 @@ public enum DimensionCalculator {
         }
 
         // Width as approximate perpendicular extent
-        let lengthDir = simd_normalize(p2 - p1)
+        let diff = p2 - p1
+        let lengthDir = simd_length(diff) > 1e-8 ? simd_normalize(diff) : SIMD3<Float>(1, 0, 0)
         var maxPerp: Float = 0
-        var w1 = points[0], w2 = points[0]
+        var w1 = first, w2 = first
 
         for point in points {
             let proj = simd_dot(point - p1, lengthDir)

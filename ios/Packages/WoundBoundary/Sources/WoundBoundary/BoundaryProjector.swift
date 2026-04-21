@@ -1,6 +1,9 @@
 import Foundation
+import os
 import simd
 import WoundCore
+
+private let logger = Logger(subsystem: "com.woundos.app", category: "Boundary")
 
 // MARK: - Projection Result
 
@@ -47,9 +50,11 @@ public final class BoundaryProjector {
     ) throws -> BoundaryProjectionResult {
 
         guard !points2D.isEmpty else {
+            logger.error("project() called with empty points2D")
             throw MeasurementError.insufficientBoundaryPoints(count: 0, minimum: 3)
         }
 
+        logger.info("project() — \(points2D.count) points, image=\(imageWidth)x\(imageHeight), mesh=\(vertices.count) verts/\(faces.count) faces, depth=\(depthWidth)x\(depthHeight)")
         let cameraPosition = cameraTransform.translation
         let invIntrinsics = intrinsics.inverse
 
@@ -88,7 +93,9 @@ public final class BoundaryProjector {
                     depthHeight: depthHeight,
                     confidenceMap: confidenceMap,
                     intrinsics: intrinsics,
-                    cameraTransform: cameraTransform
+                    cameraTransform: cameraTransform,
+                    imageWidth: imageWidth,
+                    imageHeight: imageHeight
                 )
                 projected.append(worldPoint)
                 confidenceSum += sampledConfidence
@@ -100,6 +107,8 @@ public final class BoundaryProjector {
         let meanConf = confidenceSamples > 0
             ? confidenceSum / Double(confidenceSamples)
             : 2.0   // all mesh hits → treat as full confidence
+
+        logger.info("Projection done — meshHits=\(meshHits)/\(points2D.count) hitRate=\(String(format: "%.2f", hitRate)) meanConf=\(String(format: "%.2f", meanConf)) depthFallbacks=\(confidenceSamples)")
 
         return BoundaryProjectionResult(
             projectedPoints3D: projected,
@@ -170,7 +179,9 @@ public final class BoundaryProjector {
         depthHeight: Int,
         confidenceMap: [UInt8],
         intrinsics: simd_float3x3,
-        cameraTransform: simd_float4x4
+        cameraTransform: simd_float4x4,
+        imageWidth: Int,
+        imageHeight: Int
     ) -> (SIMD3<Float>, Double) {
 
         let dx = normalizedPoint.x * Float(depthWidth - 1)
@@ -222,14 +233,17 @@ public final class BoundaryProjector {
             bestConf = idx < confidenceMap.count ? confidenceMap[idx] : 0
         }
 
-        // Unproject to camera space
+        // Unproject to camera space.
+        // Camera intrinsics reference the full RGB image resolution,
+        // NOT the (smaller) depth map resolution. Use imageWidth/Height
+        // for the pixel coordinates that feed into the intrinsics.
         let fx_cam = intrinsics[0][0]
         let fy_cam = intrinsics[1][1]
         let cx = intrinsics[2][0]
         let cy = intrinsics[2][1]
 
-        let pixelX = normalizedPoint.x * Float(depthWidth)
-        let pixelY = normalizedPoint.y * Float(depthHeight)
+        let pixelX = normalizedPoint.x * Float(imageWidth)
+        let pixelY = normalizedPoint.y * Float(imageHeight)
 
         let cameraPoint = SIMD3<Float>(
             (pixelX - cx) * bestDepth / fx_cam,

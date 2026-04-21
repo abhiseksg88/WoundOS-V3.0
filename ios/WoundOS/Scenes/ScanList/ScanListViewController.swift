@@ -104,6 +104,15 @@ final class ScanListViewController: UIViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.largeTitleDisplayMode = .always
 
+        // "Share Logs" button for testers to export crash logs
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "ladybug"),
+            style: .plain,
+            target: self,
+            action: #selector(shareLogsTapped)
+        )
+        navigationItem.rightBarButtonItem?.accessibilityLabel = "Share Debug Logs"
+
         view.addSubview(tableView)
         view.addSubview(emptyStateView)
 
@@ -135,6 +144,39 @@ final class ScanListViewController: UIViewController {
 
     @objc private func refreshPulled() {
         viewModel.loadScans()
+    }
+
+    @objc private func shareLogsTapped() {
+        CrashLogger.shared.log("User tapped Share Logs", category: .app)
+
+        let alert = UIAlertController(title: "Debug Logs", message: "Export crash & diagnostic logs for debugging.", preferredStyle: .actionSheet)
+
+        alert.addAction(UIAlertAction(title: "Share Log Files", style: .default) { [weak self] _ in
+            let urls = CrashLogger.shared.logFileURLs()
+            guard !urls.isEmpty else {
+                let empty = UIAlertController(title: "No Logs", message: "No log files found.", preferredStyle: .alert)
+                empty.addAction(UIAlertAction(title: "OK", style: .default))
+                self?.present(empty, animated: true)
+                return
+            }
+            let activityVC = UIActivityViewController(activityItems: urls, applicationActivities: nil)
+            activityVC.popoverPresentationController?.barButtonItem = self?.navigationItem.rightBarButtonItem
+            self?.present(activityVC, animated: true)
+        })
+
+        alert.addAction(UIAlertAction(title: "Copy Logs to Clipboard", style: .default) { _ in
+            let logText = CrashLogger.shared.exportLogs()
+            UIPasteboard.general.string = logText
+            CrashLogger.shared.log("Logs copied to clipboard (\(logText.count) chars)", category: .app)
+        })
+
+        alert.addAction(UIAlertAction(title: "Clear All Logs", style: .destructive) { _ in
+            CrashLogger.shared.clearLogs()
+        })
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
+        present(alert, animated: true)
     }
 }
 

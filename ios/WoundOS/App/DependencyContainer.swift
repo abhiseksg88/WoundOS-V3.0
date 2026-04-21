@@ -14,13 +14,15 @@ final class DependencyContainer {
     // MARK: - Capture
 
     lazy var captureProvider: CaptureProviderProtocol = {
-        ARSessionManager()
+        CrashLogger.shared.log("Initializing ARSessionManager", category: .capture)
+        return ARSessionManager()
     }()
 
     // MARK: - Measurement
 
     lazy var measurementEngine: MeshMeasurementEngine = {
-        MeshMeasurementEngine()
+        CrashLogger.shared.log("Initializing MeshMeasurementEngine", category: .measurement)
+        return MeshMeasurementEngine()
     }()
 
     // MARK: - Auto-Segmentation
@@ -32,24 +34,40 @@ final class DependencyContainer {
     /// Auto segment.
     lazy var autoSegmenter: WoundSegmenter? = {
         // 1. Try wound-specific CoreML model first
+        CrashLogger.shared.log("Attempting WoundAmbitSegmenter (CoreML)…", category: .segmentation)
         if let ambit = try? WoundAmbitSegmenter() {
+            CrashLogger.shared.log("WoundAmbitSegmenter initialized successfully", category: .segmentation)
             return ambit
         }
+        CrashLogger.shared.log("WoundAmbitSegmenter not available — trying VisionForegroundSegmenter", category: .segmentation, level: .warning)
         // 2. Fall back to Apple Vision generic foreground (iOS 17+)
         if #available(iOS 17.0, *) {
+            CrashLogger.shared.log("VisionForegroundSegmenter initialized (iOS 17+ fallback)", category: .segmentation)
             return VisionForegroundSegmenter()
         }
+        CrashLogger.shared.log("No segmenter available — manual drawing only", category: .segmentation, level: .warning)
         return nil
     }()
 
     // MARK: - Networking
 
-    lazy var apiClient: APIClient = {
-        APIClient()
+    lazy var authProvider: AuthProvider = {
+        AuthProvider(
+            tokenStore: KeychainTokenStore(),
+            firebase: StubFirebaseAuth()
+        )
+    }()
+
+    lazy var apiClient: WoundOSClient = {
+        WoundOSClient(
+            config: .staging,
+            session: .shared,
+            authProvider: authProvider
+        )
     }()
 
     lazy var uploadManager: UploadManager = {
-        UploadManager(apiClient: apiClient, storage: localStorage)
+        UploadManager(client: apiClient, storage: localStorage)
     }()
 
     // MARK: - Storage
