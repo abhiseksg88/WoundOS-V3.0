@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router as api_router
 from app.core.config import get_settings
+from app.workers.pubsub_handler import router as pubsub_router
 
 settings = get_settings()
 
@@ -42,6 +43,9 @@ app.add_middleware(
 
 # Mount API routes under /v1
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+# Mount Pub/Sub push handler (for Cloud Run worker receiving scan-ready events)
+app.include_router(pubsub_router)
 
 
 # ---------------------------------------------------------------------------

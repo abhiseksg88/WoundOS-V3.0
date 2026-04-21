@@ -85,15 +85,28 @@ gcloud pubsub subscriptions create sam2-worker-sub --topic=scan-ready 2>/dev/nul
 echo ""
 echo "[5/8] Creating secrets..."
 echo -n "${DB_PASSWORD}" | gcloud secrets create db-password --data-file=- 2>/dev/null || echo "  (Secret db-password already exists)"
-echo -n "change-me" | gcloud secrets create jwt-signing-key --data-file=- 2>/dev/null || echo "  (Secret jwt-signing-key already exists)"
-echo -n "" | gcloud secrets create anthropic-api-key --data-file=- 2>/dev/null || echo "  (Secret anthropic-api-key already exists)"
+
+# Generate a strong JWT signing key on first run. Never use "change-me" — the
+# service signs auth tokens with this; a weak key = token forgery.
+if ! gcloud secrets describe jwt-signing-key >/dev/null 2>&1; then
+    openssl rand -base64 48 | tr -d '\n' | gcloud secrets create jwt-signing-key --data-file=-
+    echo "  Created jwt-signing-key with a fresh random value"
+else
+    echo "  (Secret jwt-signing-key already exists)"
+fi
+
+# Anthropic key stays empty until the user adds a real key. The clinical summary
+# service handles a missing key by falling back to a stub summary.
+if ! gcloud secrets describe anthropic-api-key >/dev/null 2>&1; then
+    printf '' | gcloud secrets create anthropic-api-key --data-file=-
+    echo "  Created anthropic-api-key (empty placeholder)"
+else
+    echo "  (Secret anthropic-api-key already exists)"
+fi
 
 echo ""
-echo "  IMPORTANT: Set your Anthropic API key:"
+echo "  To set your Anthropic API key later:"
 echo "  echo -n 'sk-ant-...' | gcloud secrets versions add anthropic-api-key --data-file=-"
-echo ""
-echo "  IMPORTANT: Set your JWT signing key:"
-echo "  echo -n '$(openssl rand -base64 32)' | gcloud secrets versions add jwt-signing-key --data-file=-"
 
 # 6. VPC Connector
 echo ""
@@ -122,10 +135,11 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --role="roles/cloudsql.client" \
     --quiet 2>/dev/null || true
 
-# 8. Create migration job
+# 8. Migration job
 echo ""
-echo "[8/8] Creating migration Cloud Run job..."
-echo "  (Will be configured after first image build)"
+echo "[8/8] Migration Cloud Run job..."
+echo "  deploy.sh creates/updates woundos-migrate after each image build,"
+echo "  so there is nothing to create here. Skipping."
 
 echo ""
 echo "============================================"
