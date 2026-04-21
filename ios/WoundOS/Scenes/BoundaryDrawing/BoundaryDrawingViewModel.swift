@@ -65,13 +65,13 @@ final class BoundaryDrawingViewModel: ObservableObject {
         case .tapPoint:
             return "Tap the center of the wound"
         case .polygon:
-            return "Tap around the wound edge to place points. Tap near the first point to close."
+            return "Tap around the wound edge to place points"
         case .freeform:
             return "Trace your finger around the wound edge"
         case .auto:
             return autoSegmenterAvailable
-                ? "Tap the center of the wound — boundary will appear automatically"
-                : "Auto-detect requires iOS 17. Switch to Polygon or Freeform."
+                ? "Tap the center of the wound"
+                : "Auto-detect unavailable. Switch to Draw Manually."
         }
     }
 

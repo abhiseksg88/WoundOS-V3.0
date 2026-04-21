@@ -69,6 +69,18 @@ public enum APIError: Error, Equatable, LocalizedError {
     }
 }
 
+// MARK: - Segmentation Models
+
+/// Response from POST /v1/segment — wound boundary polygon.
+public struct SegmentationResponse: Codable, Sendable {
+    /// Polygon points in pixel coordinates [[x, y], ...]
+    public let polygon: [[Double]]
+    /// Model confidence 0...1
+    public let confidence: Double
+    /// Model identifier for audit trail
+    public let modelVersion: String
+}
+
 // MARK: - Auth Models
 
 public struct TokenRequest: Codable, Sendable {

@@ -22,6 +22,13 @@ public enum Endpoints {
         config.versionedURL.appendingPathComponent("auth/token")
     }
 
+    // MARK: - Segmentation
+
+    /// POST /v1/segment — Real-time wound segmentation via SAM 2.
+    public static var segment: URL {
+        config.versionedURL.appendingPathComponent("segment")
+    }
+
     // MARK: - Scan Upload
 
     /// POST /v1/scans/upload — Multipart upload of scan data.

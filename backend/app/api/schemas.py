@@ -197,6 +197,18 @@ class ReviewRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Segmentation
+# ---------------------------------------------------------------------------
+
+
+class SegmentationResponse(BaseModel):
+    """Response from POST /v1/segment — wound boundary polygon."""
+    polygon: list[list[float]]  # [[x, y], ...] in pixel coordinates
+    confidence: float
+    model_version: str
+
+
+# ---------------------------------------------------------------------------
 # Generic wrapper
 # ---------------------------------------------------------------------------
 

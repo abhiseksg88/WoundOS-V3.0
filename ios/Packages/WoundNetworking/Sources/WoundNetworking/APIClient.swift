@@ -27,6 +27,47 @@ public actor WoundOSClient {
         Endpoints.config = config
     }
 
+    // MARK: - Segmentation
+
+    /// POST /v1/segment — Send image + tap point, get wound boundary polygon.
+    public func segmentImage(
+        jpegData: Data,
+        tapPoint: (x: Double, y: Double),
+        imageWidth: Int,
+        imageHeight: Int
+    ) async throws -> SegmentationResponse {
+        let boundary = UUID().uuidString
+        var body = Data()
+
+        func appendField(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+
+        // File part: image
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"wound.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(jpegData)
+        body.append("\r\n".data(using: .utf8)!)
+
+        // Form fields
+        appendField("tap_point", "[\(tapPoint.x), \(tapPoint.y)]")
+        appendField("image_width", "\(imageWidth)")
+        appendField("image_height", "\(imageHeight)")
+
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var request = URLRequest(url: Endpoints.segment)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 20
+        request.httpBody = body
+
+        return try await authenticatedRequest(request)
+    }
+
     // MARK: - Upload Scan
 
     /// POST /v1/scans/upload — multipart upload of scan data.

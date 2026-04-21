@@ -49,7 +49,7 @@ final class BoundaryDrawingViewController: UIViewController {
     }()
 
     private lazy var modeToggle: UISegmentedControl = {
-        let control = UISegmentedControl(items: ["Auto", "Polygon", "Freeform"])
+        let control = UISegmentedControl(items: ["Auto Detect", "Draw Manually"])
         control.translatesAutoresizingMaskIntoConstraints = false
         control.selectedSegmentIndex = 0
         control.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
@@ -57,7 +57,7 @@ final class BoundaryDrawingViewController: UIViewController {
     }()
 
     /// Status label shown inside `processingOverlay`. Text is swapped between
-    /// "Detecting outline…" (auto-segmentation) and "Computing measurements…"
+    /// "Detecting wound boundary…" (auto-segmentation) and "Computing measurements…"
     /// (mesh pipeline) depending on which operation is in flight.
     private lazy var processingLabel: UILabel = {
         let label = UILabel()
@@ -66,6 +66,19 @@ final class BoundaryDrawingViewController: UIViewController {
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
+    }()
+
+    /// Pulsing ring shown at tap point during auto-segmentation.
+    private lazy var pulsingRingView: UIView = {
+        let ring = UIView()
+        ring.translatesAutoresizingMaskIntoConstraints = false
+        ring.isHidden = true
+        ring.isUserInteractionEnabled = false
+        ring.layer.borderColor = WOColors.primaryGreen.cgColor
+        ring.layer.borderWidth = 3
+        ring.layer.cornerRadius = 30
+        ring.frame.size = CGSize(width: 60, height: 60)
+        return ring
     }()
 
     private lazy var bottomBar: UIVisualEffectView = {
@@ -184,7 +197,7 @@ final class BoundaryDrawingViewController: UIViewController {
         if !viewModel.autoSegmenterAvailable {
             modeToggle.setEnabled(false, forSegmentAt: 0)
             modeToggle.selectedSegmentIndex = 1
-            viewModel.drawingMode = .polygon
+            viewModel.drawingMode = .freeform
         } else {
             modeToggle.selectedSegmentIndex = 0
         }
@@ -221,6 +234,7 @@ final class BoundaryDrawingViewController: UIViewController {
 
         view.addSubview(imageView)
         view.addSubview(canvasView)
+        view.addSubview(pulsingRingView)
         view.addSubview(instructionCard)
         view.addSubview(bottomBar)
         view.addSubview(warningBanner)
@@ -375,14 +389,16 @@ final class BoundaryDrawingViewController: UIViewController {
             .sink { [weak self] running in
                 guard let self else { return }
                 if running {
-                    self.processingLabel.text = "Detecting outline…"
+                    self.processingLabel.text = "Detecting wound boundary…"
                     self.processingOverlay.isHidden = false
                     self.activityIndicator.startAnimating()
                     self.canvasView.isUserInteractionEnabled = false
+                    self.showPulsingRing()
                 } else if !self.viewModel.isComputing {
                     self.processingOverlay.isHidden = true
                     self.activityIndicator.stopAnimating()
                     self.canvasView.isUserInteractionEnabled = true
+                    self.hidePulsingRing()
                 }
             }
             .store(in: &cancellables)
@@ -395,6 +411,7 @@ final class BoundaryDrawingViewController: UIViewController {
                 //    the delegate → didFinalizeBoundary → O(n²) validate chain.
                 //    autoFinalizeBoundary handles finalization with relaxed validation.
                 self.canvasView.setBoundary(points: polygon, notifyDelegate: false)
+                // Switch to manual edit mode so nurse can adjust the detected boundary
                 self.modeToggle.selectedSegmentIndex = 1
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
 
@@ -417,8 +434,7 @@ final class BoundaryDrawingViewController: UIViewController {
         let mode: DrawingMode
         switch modeToggle.selectedSegmentIndex {
         case 0: mode = .auto
-        case 1: mode = .polygon
-        case 2: mode = .freeform
+        case 1: mode = .freeform
         default: return
         }
         // Set mode on both VM and canvas SYNCHRONOUSLY to eliminate the
@@ -451,6 +467,34 @@ final class BoundaryDrawingViewController: UIViewController {
     @objc private func confirmTapped() {
         guard viewModel.boundaryFinalized else { return }
         showPUSHInputSheet()
+    }
+
+    // MARK: - Pulsing Ring Animation
+
+    private func showPulsingRing() {
+        guard let tapPoint = viewModel.tapPoint else { return }
+        pulsingRingView.center = tapPoint
+        pulsingRingView.bounds = CGRect(x: 0, y: 0, width: 60, height: 60)
+        pulsingRingView.layer.cornerRadius = 30
+        pulsingRingView.alpha = 1
+        pulsingRingView.isHidden = false
+        pulsingRingView.transform = .identity
+
+        UIView.animate(
+            withDuration: 1.0,
+            delay: 0,
+            options: [.repeat, .autoreverse, .curveEaseInOut]
+        ) {
+            self.pulsingRingView.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
+            self.pulsingRingView.alpha = 0.3
+        }
+    }
+
+    private func hidePulsingRing() {
+        pulsingRingView.layer.removeAllAnimations()
+        pulsingRingView.isHidden = true
+        pulsingRingView.transform = .identity
+        pulsingRingView.alpha = 1
     }
 
     // MARK: - PUSH Input Sheet

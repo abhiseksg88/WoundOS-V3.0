@@ -16,6 +16,12 @@ final class CaptureViewModel: ObservableObject {
     @Published var readiness: CaptureReadiness = .notReady(reason: .trackingNotNormal)
     @Published var error: String?
 
+    /// Live distance to surface in meters (from CaptureQualityMonitor).
+    /// Updated every readiness change. Used by the distance indicator bar.
+    var currentDistanceM: Float? {
+        qualityMonitor?.lastDistance
+    }
+
     // MARK: - Navigation
 
     /// Provides both the snapshot and the moment-of-capture quality score.

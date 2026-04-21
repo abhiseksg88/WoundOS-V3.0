@@ -27,25 +27,44 @@ final class DependencyContainer {
 
     // MARK: - Auto-Segmentation
 
-    /// The on-device wound segmenter. Prefers the wound-specific WoundAmbit
-    /// FUSegNet CoreML model; falls back to Apple Vision's generic foreground
-    /// instance mask (iOS 17+). Returns `nil` on older OSes — the drawing
-    /// scene falls back to manual polygon / freeform drawing and hides the
-    /// Auto segment.
+    /// Primary segmenter: server-side SAM 2 via WoundOS backend.
+    /// Fallback chain: ServerSegmenter → VisionForegroundSegmenter → nil (manual).
     lazy var autoSegmenter: WoundSegmenter? = {
-        // 1. Try wound-specific CoreML model first
+        // 1. Server-side SAM 2 (primary — best accuracy, no app size cost)
+        CrashLogger.shared.log("Initializing ServerSegmenter (SAM 2 backend)", category: .segmentation)
+        let client = self.apiClient
+        let onDeviceFallback = self.fallbackSegmenter
+        let serverSegmenter = ServerSegmenter(
+            segmentRequest: { jpegData, tapPoint, imageWidth, imageHeight in
+                let response = try await client.segmentImage(
+                    jpegData: jpegData,
+                    tapPoint: tapPoint,
+                    imageWidth: imageWidth,
+                    imageHeight: imageHeight
+                )
+                return (
+                    polygon: response.polygon,
+                    confidence: response.confidence,
+                    modelVersion: response.modelVersion
+                )
+            },
+            fallback: onDeviceFallback
+        )
+        return serverSegmenter
+    }()
+
+    /// On-device fallback segmenter used when the server is unreachable.
+    lazy var fallbackSegmenter: WoundSegmenter? = {
         CrashLogger.shared.log("Attempting WoundAmbitSegmenter (CoreML)…", category: .segmentation)
         if let ambit = try? WoundAmbitSegmenter() {
             CrashLogger.shared.log("WoundAmbitSegmenter initialized successfully", category: .segmentation)
             return ambit
         }
-        CrashLogger.shared.log("WoundAmbitSegmenter not available — trying VisionForegroundSegmenter", category: .segmentation, level: .warning)
-        // 2. Fall back to Apple Vision generic foreground (iOS 17+)
         if #available(iOS 17.0, *) {
-            CrashLogger.shared.log("VisionForegroundSegmenter initialized (iOS 17+ fallback)", category: .segmentation)
+            CrashLogger.shared.log("VisionForegroundSegmenter initialized (fallback)", category: .segmentation)
             return VisionForegroundSegmenter()
         }
-        CrashLogger.shared.log("No segmenter available — manual drawing only", category: .segmentation, level: .warning)
+        CrashLogger.shared.log("No fallback segmenter available", category: .segmentation, level: .warning)
         return nil
     }()
 

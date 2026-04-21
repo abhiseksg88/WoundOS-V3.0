@@ -138,6 +138,104 @@ final class CaptureViewController: UIViewController {
         return label
     }()
 
+    // MARK: - Wound Framing Guide
+
+    /// Translucent reticle overlay to guide wound framing.
+    private lazy var framingGuideView: UIView = {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.isUserInteractionEnabled = false
+
+        // Dashed circle reticle
+        let reticle = UIView()
+        reticle.translatesAutoresizingMaskIntoConstraints = false
+        reticle.backgroundColor = .clear
+        reticle.layer.cornerRadius = 80
+        reticle.layer.borderWidth = 1.5
+        reticle.layer.borderColor = UIColor.white.withAlphaComponent(0.4).cgColor
+
+        // Crosshair lines
+        let hLine = UIView()
+        hLine.translatesAutoresizingMaskIntoConstraints = false
+        hLine.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+
+        let vLine = UIView()
+        vLine.translatesAutoresizingMaskIntoConstraints = false
+        vLine.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+
+        // Label
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "Center wound in frame"
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.textColor = UIColor.white.withAlphaComponent(0.5)
+        label.textAlignment = .center
+
+        container.addSubview(reticle)
+        container.addSubview(hLine)
+        container.addSubview(vLine)
+        container.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            reticle.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            reticle.centerYAnchor.constraint(equalTo: container.centerYAnchor, constant: -30),
+            reticle.widthAnchor.constraint(equalToConstant: 160),
+            reticle.heightAnchor.constraint(equalToConstant: 160),
+
+            hLine.centerYAnchor.constraint(equalTo: reticle.centerYAnchor),
+            hLine.leadingAnchor.constraint(equalTo: reticle.leadingAnchor, constant: 10),
+            hLine.trailingAnchor.constraint(equalTo: reticle.trailingAnchor, constant: -10),
+            hLine.heightAnchor.constraint(equalToConstant: 0.5),
+
+            vLine.centerXAnchor.constraint(equalTo: reticle.centerXAnchor),
+            vLine.topAnchor.constraint(equalTo: reticle.topAnchor, constant: 10),
+            vLine.bottomAnchor.constraint(equalTo: reticle.bottomAnchor, constant: -10),
+            vLine.widthAnchor.constraint(equalToConstant: 0.5),
+
+            label.topAnchor.constraint(equalTo: reticle.bottomAnchor, constant: 12),
+            label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+        ])
+
+        return container
+    }()
+
+    // MARK: - Distance Indicator Bar
+
+    /// Visual bar showing the 15–30 cm optimal range with live reading.
+    private lazy var distanceBar: UIView = {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.isUserInteractionEnabled = false
+        return container
+    }()
+
+    private lazy var distanceTrack: UIView = {
+        let track = UIView()
+        track.translatesAutoresizingMaskIntoConstraints = false
+        track.backgroundColor = UIColor.white.withAlphaComponent(0.15)
+        track.layer.cornerRadius = 3
+        return track
+    }()
+
+    private lazy var distanceFill: UIView = {
+        let fill = UIView()
+        fill.translatesAutoresizingMaskIntoConstraints = false
+        fill.backgroundColor = WOColors.primaryGreen
+        fill.layer.cornerRadius = 3
+        return fill
+    }()
+
+    private lazy var distanceLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+        label.textColor = .white
+        label.textAlignment = .center
+        return label
+    }()
+
+    private var distanceFillWidthConstraint: NSLayoutConstraint?
+
     // MARK: - Init
 
     init(viewModel: CaptureViewModel) {
@@ -180,8 +278,10 @@ final class CaptureViewController: UIViewController {
         view.backgroundColor = .black
 
         view.addSubview(cameraView)
+        view.addSubview(framingGuideView)
         view.addSubview(trackingOverlay)
         view.addSubview(guidanceCard)
+        view.addSubview(distanceBar)
         view.addSubview(captureButton)
         view.addSubview(hintLabel)
 
@@ -190,12 +290,26 @@ final class CaptureViewController: UIViewController {
         guidanceCard.contentView.addSubview(guidanceIcon)
         guidanceCard.contentView.addSubview(guidanceLabel)
 
+        // Distance bar subviews
+        distanceBar.addSubview(distanceTrack)
+        distanceBar.addSubview(distanceFill)
+        distanceBar.addSubview(distanceLabel)
+
+        let fillWidth = distanceFill.widthAnchor.constraint(equalToConstant: 0)
+        distanceFillWidthConstraint = fillWidth
+
         NSLayoutConstraint.activate([
             // AR view — full screen
             cameraView.topAnchor.constraint(equalTo: view.topAnchor),
             cameraView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             cameraView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             cameraView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            // Framing guide — centered in camera view
+            framingGuideView.topAnchor.constraint(equalTo: view.topAnchor),
+            framingGuideView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            framingGuideView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            framingGuideView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             // Tracking overlay
             trackingOverlay.topAnchor.constraint(equalTo: view.topAnchor),
@@ -219,6 +333,25 @@ final class CaptureViewController: UIViewController {
             guidanceLabel.leadingAnchor.constraint(equalTo: guidanceIcon.trailingAnchor, constant: WOSpacing.sm),
             guidanceLabel.trailingAnchor.constraint(equalTo: guidanceCard.contentView.trailingAnchor, constant: -WOSpacing.lg),
             guidanceLabel.centerYAnchor.constraint(equalTo: guidanceCard.contentView.centerYAnchor),
+
+            // Distance bar — above capture button
+            distanceBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 60),
+            distanceBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -60),
+            distanceBar.bottomAnchor.constraint(equalTo: captureButton.topAnchor, constant: -20),
+            distanceBar.heightAnchor.constraint(equalToConstant: 28),
+
+            distanceTrack.leadingAnchor.constraint(equalTo: distanceBar.leadingAnchor),
+            distanceTrack.trailingAnchor.constraint(equalTo: distanceBar.trailingAnchor),
+            distanceTrack.centerYAnchor.constraint(equalTo: distanceBar.centerYAnchor),
+            distanceTrack.heightAnchor.constraint(equalToConstant: 6),
+
+            distanceFill.leadingAnchor.constraint(equalTo: distanceTrack.leadingAnchor),
+            distanceFill.centerYAnchor.constraint(equalTo: distanceTrack.centerYAnchor),
+            distanceFill.heightAnchor.constraint(equalToConstant: 6),
+            fillWidth,
+
+            distanceLabel.centerXAnchor.constraint(equalTo: distanceBar.centerXAnchor),
+            distanceLabel.bottomAnchor.constraint(equalTo: distanceTrack.topAnchor, constant: -2),
 
             // Capture button — bottom center
             captureButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -249,6 +382,12 @@ final class CaptureViewController: UIViewController {
                 self.guidanceIcon.tintColor = isReady
                     ? WOColors.primaryGreen
                     : WOColors.warningOrange
+
+                // Update distance bar
+                self.updateDistanceBar()
+
+                // Hide framing guide when tracking overlay is showing
+                self.framingGuideView.alpha = (self.trackingOverlay.isHidden) ? 1 : 0
             }
             .store(in: &cancellables)
 
@@ -286,6 +425,36 @@ final class CaptureViewController: UIViewController {
                 self?.present(alert, animated: true)
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Distance Bar
+
+    private func updateDistanceBar() {
+        guard let distance = viewModel.currentDistanceM else {
+            distanceLabel.text = "-- cm"
+            distanceFill.backgroundColor = UIColor.white.withAlphaComponent(0.3)
+            distanceFillWidthConstraint?.constant = 0
+            return
+        }
+
+        let cm = distance * 100
+        distanceLabel.text = String(format: "%.0f cm", cm)
+
+        // Optimal range: 15–30 cm. Map 5–50 cm to full bar width.
+        let trackWidth = distanceTrack.bounds.width
+        guard trackWidth > 0 else { return }
+
+        let minCm: Float = 5
+        let maxCm: Float = 50
+        let fraction = CGFloat((cm - minCm) / (maxCm - minCm))
+        let clampedFraction = max(0, min(1, fraction))
+        distanceFillWidthConstraint?.constant = trackWidth * clampedFraction
+
+        // Color: green if in range, orange otherwise
+        let inRange = (15...30).contains(Int(cm))
+        let color = inRange ? WOColors.primaryGreen : WOColors.warningOrange
+        distanceFill.backgroundColor = color
+        distanceLabel.textColor = inRange ? .white : WOColors.warningOrange
     }
 
     // MARK: - Actions

@@ -26,6 +26,7 @@ from app.api.schemas import (
     ScanResponse,
     ScanStatusResponse,
     ScanUploadMetadata,
+    SegmentationResponse,
     TokenRequest,
     TokenResponse,
     UploadResponse,
@@ -35,12 +36,59 @@ from app.core.database import get_db
 from app.models.patient import Patient
 from app.models.scan import Scan, ScanStatus
 from app.services.pubsub import pubsub_service
+from app.services.sam2_service import segment_wound
 from app.services.storage import storage_service
 from app.workers.sam2_processor import process_scan
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# 0. POST /v1/segment — Real-time wound segmentation
+# ---------------------------------------------------------------------------
+
+
+@router.post("/segment", response_model=SegmentationResponse)
+async def segment_image(
+    image: UploadFile = File(...),
+    tap_point: str = Form(...),
+    image_width: int = Form(...),
+    image_height: int = Form(...),
+    user: dict = Depends(get_current_user),
+):
+    """Segment a wound from an image using a tap-point prompt.
+
+    Returns a polygon boundary suitable for display on the iOS canvas.
+    Uses SAM 2 when available, falls back to GrabCut-based segmentation.
+    """
+    image_bytes = await image.read()
+
+    import json
+    tap = json.loads(tap_point)
+    if not isinstance(tap, list) or len(tap) < 2:
+        raise HTTPException(status_code=400, detail="tap_point must be [x, y]")
+
+    try:
+        result = await segment_wound(
+            image_bytes=image_bytes,
+            tap_point=tap,
+            image_width=image_width,
+            image_height=image_height,
+        )
+    except Exception as e:
+        logger.error(f"Segmentation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Segmentation failed: {str(e)}")
+
+    if not result.get("polygon") or len(result["polygon"]) < 3:
+        raise HTTPException(status_code=422, detail="No wound boundary detected")
+
+    return SegmentationResponse(
+        polygon=result["polygon"],
+        confidence=result["confidence"],
+        model_version=result["model_version"],
+    )
 
 
 # ---------------------------------------------------------------------------
