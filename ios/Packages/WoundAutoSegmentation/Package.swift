@@ -17,6 +17,8 @@ let package = Package(
                 .product(name: "WoundCore", package: "WoundCore"),
             ],
             path: "Sources/WoundAutoSegmentation"
+            // Uncomment after running Scripts/convert_fusegnet.py to add the CoreML model:
+            // resources: [.copy("Resources/FUSegNet.mlpackage")]
         ),
         .testTarget(
             name: "WoundAutoSegmentationTests",

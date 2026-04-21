@@ -2,6 +2,13 @@ import Foundation
 import simd
 import WoundCore
 
+// MARK: - Validation Severity
+
+public enum ValidationSeverity {
+    case warning
+    case error
+}
+
 // MARK: - Boundary Validation Result
 
 public struct BoundaryValidationResult {
@@ -22,11 +29,22 @@ public enum BoundaryValidationError: Error, LocalizedError {
         case .tooFewPoints(let count):
             return "Need at least 3 points to form a boundary (have \(count))"
         case .selfIntersecting:
-            return "Boundary cannot cross over itself"
+            return "Polygon looks like it crosses itself — measurement may be inaccurate"
         case .areaTooSmall(let area):
-            return "Boundary area too small (\(Int(area)) px²). Please trace a larger area."
+            return "Polygon looks small (\(Int(area)) px²) — measurement may be inaccurate"
         case .boundaryOutOfBounds:
             return "Boundary extends outside the captured image"
+        }
+    }
+
+    /// All validation issues are non-blocking warnings (Bug 7).
+    /// The Measure button should never be gated on these.
+    public var severity: ValidationSeverity {
+        switch self {
+        case .tooFewPoints:
+            return .error   // Truly invalid — can't form a polygon
+        case .selfIntersecting, .areaTooSmall, .boundaryOutOfBounds:
+            return .warning
         }
     }
 }
@@ -43,11 +61,13 @@ public enum BoundaryValidator {
     /// Minimum enclosed area in normalized coordinate units squared
     public static let minimumNormalizedArea: Double = 0.0001
 
-    /// Validate a set of 2D boundary points (normalized 0...1 coordinates)
+    /// Validate a set of 2D boundary points (normalized 0...1 coordinates).
+    /// Only `tooFewPoints` makes the result truly invalid. All other issues
+    /// are non-blocking warnings (Bug 7 fix).
     public static func validate(points: [SIMD2<Float>]) -> BoundaryValidationResult {
         var errors = [BoundaryValidationError]()
 
-        // Check minimum point count
+        // Check minimum point count — this is the only truly blocking check
         if points.count < minimumPointCount {
             errors.append(.tooFewPoints(count: points.count))
             return BoundaryValidationResult(isValid: false, errors: errors)
@@ -61,19 +81,21 @@ public enum BoundaryValidator {
             errors.append(.boundaryOutOfBounds)
         }
 
-        // Check for self-intersection
+        // Check for self-intersection (warning only)
         if isSelfIntersecting(points) {
             errors.append(.selfIntersecting)
         }
 
-        // Check minimum area using shoelace formula
+        // Check minimum area using shoelace formula (warning only)
         let area = polygonArea(points)
         if area < minimumNormalizedArea {
             errors.append(.areaTooSmall(areaPx2: area * 1_000_000))
         }
 
+        // isValid is true as long as we have enough points — other issues
+        // are surfaced as warnings but don't block measurement.
         return BoundaryValidationResult(
-            isValid: errors.isEmpty,
+            isValid: true,
             errors: errors
         )
     }

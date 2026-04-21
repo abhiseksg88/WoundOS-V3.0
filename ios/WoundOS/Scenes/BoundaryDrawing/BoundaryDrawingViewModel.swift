@@ -60,7 +60,7 @@ final class BoundaryDrawingViewModel: ObservableObject {
             return "Trace your finger around the wound edge"
         case .auto:
             return autoSegmenterAvailable
-                ? "Tap the center of the object — outline will appear automatically"
+                ? "Tap the center of the wound — boundary will appear automatically"
                 : "Auto-detect requires iOS 17. Switch to Polygon or Freeform."
         }
     }
@@ -91,18 +91,15 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
     // MARK: - Tap Point
 
-    func didPlaceTapPoint(_ point: CGPoint, in viewSize: CGSize) {
+    func didPlaceTapPoint(_ point: CGPoint, in geometry: ImageViewGeometry) {
         tapPoint = point
-        normalizedTapPoint = SIMD2<Float>(
-            Float(point.x / viewSize.width),
-            Float(point.y / viewSize.height)
-        )
+        normalizedTapPoint = geometry.viewToImageNormalized(point)
 
         // In .auto mode, the tap is a point prompt for the segmenter. The VC
         // subscribes to `autoSegmentationResult` and seeds the canvas with
         // the resulting polygon. Otherwise, advance to polygon drawing mode.
         if drawingMode == .auto {
-            runAutoSegmentation(tapPoint: point, viewSize: viewSize)
+            runAutoSegmentation(tapPoint: point, geometry: geometry)
         } else {
             drawingMode = .polygon
         }
@@ -110,29 +107,41 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
     // MARK: - Auto Segmentation
 
-    func runAutoSegmentation(tapPoint: CGPoint, viewSize: CGSize) {
+    func runAutoSegmentation(tapPoint: CGPoint, geometry: ImageViewGeometry) {
         guard let segmenter else {
             error = "Auto-detect is not available on this device."
             return
         }
-        guard let image = capturedImage, let cgImage = image.cgImage else {
+        guard let image = capturedImage else {
             error = "Captured image is unavailable."
             return
         }
 
-        // Convert tap from view-local coords to image pixel coords. The
-        // image view uses .scaleAspectFit — same letterboxing logic the
-        // existing pipeline relies on — so we project through the fit rect.
-        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
-        let fitRect = aspectFitRect(imageSize: imageSize, in: viewSize)
-        guard fitRect.contains(tapPoint) else {
+        // Ensure CGImage pixels match the displayed orientation (Bug 5).
+        // UIImage may carry EXIF orientation that cgImage doesn't reflect.
+        let cgImage: CGImage
+        if image.imageOrientation == .up, let cg = image.cgImage {
+            cgImage = cg
+        } else {
+            // Render to a new CGImage with orientation pre-applied
+            let renderer = UIGraphicsImageRenderer(size: image.size)
+            let rendered = renderer.image { _ in
+                image.draw(in: CGRect(origin: .zero, size: image.size))
+            }
+            guard let cg = rendered.cgImage else {
+                error = "Captured image is unavailable."
+                return
+            }
+            cgImage = cg
+        }
+
+        // Convert tap from view-local coords to image pixel coords using
+        // the geometry's fitted rect (accounts for .scaleAspectFit letterboxing).
+        guard geometry.fittedRect.contains(tapPoint) else {
             error = "Tap inside the image area."
             return
         }
-        let imageTap = CGPoint(
-            x: (tapPoint.x - fitRect.minX) / fitRect.width * imageSize.width,
-            y: (tapPoint.y - fitRect.minY) / fitRect.height * imageSize.height
-        )
+        let imageTap = geometry.viewPointToImagePoint(tapPoint)
 
         isAutoSegmenting = true
         Task { @MainActor in
@@ -144,57 +153,45 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 )
                 // Project polygon back into view-local coords for the canvas.
                 let viewPolygon = result.polygonImageSpace.map { p in
-                    CGPoint(
-                        x: fitRect.minX + p.x / imageSize.width * fitRect.width,
-                        y: fitRect.minY + p.y / imageSize.height * fitRect.height
-                    )
+                    geometry.imagePointToViewPoint(p)
                 }
                 boundaryWasAutoSeeded = true
                 segmenterModelId = result.modelIdentifier
                 autoSegmentationResult.send(viewPolygon)
             } catch {
-                self.error = error.localizedDescription
+                self.error = "Segmentation failed: \(error.localizedDescription)"
             }
         }
     }
 
-    private func aspectFitRect(imageSize: CGSize, in viewSize: CGSize) -> CGRect {
-        guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
-        let scale = min(viewSize.width / imageSize.width, viewSize.height / imageSize.height)
-        let fittedSize = CGSize(
-            width: imageSize.width * scale,
-            height: imageSize.height * scale
-        )
-        let origin = CGPoint(
-            x: (viewSize.width - fittedSize.width) / 2,
-            y: (viewSize.height - fittedSize.height) / 2
-        )
-        return CGRect(origin: origin, size: fittedSize)
-    }
-
     // MARK: - Boundary Updates
 
-    func didUpdateBoundary(_ points: [CGPoint], in viewSize: CGSize) {
-        normalizedBoundaryPoints = points.map { p in
-            SIMD2<Float>(
-                Float(p.x / viewSize.width),
-                Float(p.y / viewSize.height)
-            )
-        }
+    func didUpdateBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
+        normalizedBoundaryPoints = points.map { geometry.viewToImageNormalized($0) }
     }
 
-    func didFinalizeBoundary(_ points: [CGPoint], in viewSize: CGSize) {
-        normalizedBoundaryPoints = points.map { p in
-            SIMD2<Float>(
-                Float(p.x / viewSize.width),
-                Float(p.y / viewSize.height)
-            )
+    func didFinalizeBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
+        normalizedBoundaryPoints = points.map { geometry.viewToImageNormalized($0) }
+
+        // Enable Measure as soon as we have a valid polygon (Bug 3).
+        // Validation is non-blocking — shown as warnings only.
+        if normalizedBoundaryPoints.count >= 3 {
+            boundaryFinalized = true
         }
 
-        // Validate
         let result = BoundaryValidator.validate(points: normalizedBoundaryPoints)
-        if !result.isValid {
-            validationErrors = result.errors
+        validationErrors = result.errors
+    }
+
+    /// Auto-finalize an auto-segmented boundary with relaxed validation.
+    /// Vision's contour detector produces valid closed polygons, so we
+    /// skip strict self-intersection and area checks that can false-positive
+    /// on machine-generated contours.
+    func autoFinalizeBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
+        normalizedBoundaryPoints = points.map { geometry.viewToImageNormalized($0) }
+
+        guard normalizedBoundaryPoints.count >= 3 else {
+            validationErrors = [.tooFewPoints(count: normalizedBoundaryPoints.count)]
             return
         }
 
@@ -202,15 +199,24 @@ final class BoundaryDrawingViewModel: ObservableObject {
         boundaryFinalized = true
     }
 
-    func clearBoundary() {
+    /// Clears boundary state without changing drawingMode.
+    /// Called by the VC when switching modes — the mode is owned by the
+    /// segmented control, not by the clear action. (Bug 1 fix)
+    func clearBoundaryKeepingMode() {
         normalizedBoundaryPoints = []
         boundaryFinalized = false
         validationErrors = []
-        drawingMode = .tapPoint
         normalizedTapPoint = nil
         tapPoint = nil
         boundaryWasAutoSeeded = false
         segmenterModelId = nil
+        error = nil
+    }
+
+    /// Full clear for the explicit "Clear" button. Does not hardcode
+    /// a specific mode — the VC's segmented control owns mode selection.
+    func clearBoundary() {
+        clearBoundaryKeepingMode()
     }
 
     // MARK: - Compute Measurements
@@ -311,9 +317,20 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
             } catch {
                 isComputing = false
-                self.error = error.localizedDescription
+                self.error = "Measurement failed: \(error.localizedDescription)"
             }
         }
+    }
+
+    /// Trigger measurement with default PUSH values for the auto-flow.
+    func computeMeasurementsWithDefaults() {
+        computeMeasurements(
+            patientId: "patient-001",
+            nurseId: "nurse-001",
+            facilityId: "facility-001",
+            exudateAmount: .none,
+            tissueType: .granulation
+        )
     }
 
     // MARK: - Build CaptureData

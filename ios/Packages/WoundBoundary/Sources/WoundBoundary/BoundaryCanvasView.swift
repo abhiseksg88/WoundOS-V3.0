@@ -57,6 +57,7 @@ public final class BoundaryCanvasView: UIView {
 
     // Shape layers for rendering
     private let boundaryShapeLayer = CAShapeLayer()
+    private let boundingBoxLayer = CAShapeLayer()
     private let vertexLayer = CALayer()
     private let tapPointLayer = CAShapeLayer()
 
@@ -83,6 +84,13 @@ public final class BoundaryCanvasView: UIView {
         boundaryShapeLayer.lineCap = .round
         layer.addSublayer(boundaryShapeLayer)
 
+        boundingBoxLayer.fillColor = UIColor.clear.cgColor
+        boundingBoxLayer.strokeColor = UIColor.systemYellow.withAlphaComponent(0.7).cgColor
+        boundingBoxLayer.lineWidth = 1.5
+        boundingBoxLayer.lineDashPattern = [6, 4]
+        boundingBoxLayer.lineJoin = .miter
+        layer.addSublayer(boundingBoxLayer)
+
         tapPointLayer.fillColor = UIColor.systemRed.withAlphaComponent(0.8).cgColor
         tapPointLayer.strokeColor = UIColor.white.cgColor
         tapPointLayer.lineWidth = 2.0
@@ -98,6 +106,7 @@ public final class BoundaryCanvasView: UIView {
     /// Does **not** re-fire `canvasDidPlaceTapPoint`; that has already been
     /// delivered by the tap that triggered segmentation.
     public func setBoundary(points: [CGPoint], keepTapPoint: Bool = true) {
+        guard points.count >= 3 else { return }
         if !keepTapPoint { tapPoint = nil }
         boundaryPoints = points
         isDrawingFreeform = false
@@ -111,6 +120,7 @@ public final class BoundaryCanvasView: UIView {
         tapPoint = nil
         boundaryPoints.removeAll()
         isDrawingFreeform = false
+        boundingBoxLayer.path = nil
         updateRendering()
         delegate?.canvasDidClearBoundary()
     }
@@ -225,6 +235,27 @@ public final class BoundaryCanvasView: UIView {
             boundaryShapeLayer.path = path.cgPath
         } else {
             boundaryShapeLayer.path = nil
+        }
+
+        // Render bounding box around boundary
+        if boundaryPoints.count >= 3 {
+            let xs = boundaryPoints.map(\.x)
+            let ys = boundaryPoints.map(\.y)
+            if let minX = xs.min(), let maxX = xs.max(),
+               let minY = ys.min(), let maxY = ys.max() {
+                let padding: CGFloat = 8.0
+                let bboxRect = CGRect(
+                    x: minX - padding,
+                    y: minY - padding,
+                    width: (maxX - minX) + padding * 2,
+                    height: (maxY - minY) + padding * 2
+                )
+                boundingBoxLayer.path = UIBezierPath(roundedRect: bboxRect, cornerRadius: 4).cgPath
+            } else {
+                boundingBoxLayer.path = nil
+            }
+        } else {
+            boundingBoxLayer.path = nil
         }
 
         // Render vertex dots (polygon mode only)

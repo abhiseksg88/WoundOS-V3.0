@@ -14,14 +14,40 @@ final class CaptureViewController: UIViewController {
 
     // MARK: - UI Elements
 
+    #if !targetEnvironment(simulator)
     private lazy var arView: ARSCNView = {
         let view = ARSCNView()
         view.translatesAutoresizingMaskIntoConstraints = false
         view.automaticallyUpdatesLighting = true
         return view
     }()
+    #endif
 
-    private lazy var guidanceCard: UIView = {
+    private lazy var cameraView: UIView = {
+        #if targetEnvironment(simulator)
+        let placeholder = UIView()
+        placeholder.translatesAutoresizingMaskIntoConstraints = false
+        placeholder.backgroundColor = UIColor(white: 0.12, alpha: 1)
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "ARKit requires a physical device\nwith LiDAR (iPhone 12 Pro+)"
+        label.font = .systemFont(ofSize: 17, weight: .medium)
+        label.textColor = .white
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        placeholder.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: placeholder.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: placeholder.centerYAnchor),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: placeholder.leadingAnchor, constant: 32),
+        ])
+        return placeholder
+        #else
+        return arView
+        #endif
+    }()
+
+    private lazy var guidanceCard: UIVisualEffectView = {
         let card = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
         card.translatesAutoresizingMaskIntoConstraints = false
         card.layer.cornerRadius = 14
@@ -134,9 +160,11 @@ final class CaptureViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         viewModel.startSession()
+        #if !targetEnvironment(simulator)
         if let session = viewModel.arSession {
             arView.session = session
         }
+        #endif
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -151,7 +179,7 @@ final class CaptureViewController: UIViewController {
     private func setupUI() {
         view.backgroundColor = .black
 
-        view.addSubview(arView)
+        view.addSubview(cameraView)
         view.addSubview(trackingOverlay)
         view.addSubview(guidanceCard)
         view.addSubview(captureButton)
@@ -164,10 +192,10 @@ final class CaptureViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             // AR view — full screen
-            arView.topAnchor.constraint(equalTo: view.topAnchor),
-            arView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            arView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            arView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            cameraView.topAnchor.constraint(equalTo: view.topAnchor),
+            cameraView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            cameraView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            cameraView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             // Tracking overlay
             trackingOverlay.topAnchor.constraint(equalTo: view.topAnchor),
