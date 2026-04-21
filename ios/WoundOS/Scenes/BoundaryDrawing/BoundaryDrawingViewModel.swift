@@ -177,23 +177,29 @@ final class BoundaryDrawingViewModel: ObservableObject {
     }
 
     func didFinalizeBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
-        CrashLogger.shared.log("Boundary finalized with \(points.count) view-space points", category: .boundary)
+        CrashLogger.shared.log("didFinalizeBoundary: \(points.count) view-space points, geometry.fittedRect=\(geometry.fittedRect)", category: .boundary)
         normalizedBoundaryPoints = points.map { geometry.viewToSensorNormalized($0) }
+        CrashLogger.shared.log("didFinalizeBoundary: normalized \(normalizedBoundaryPoints.count) points", category: .boundary)
 
         // Enable Measure as soon as we have a valid polygon (Bug 3).
         // Validation is non-blocking — shown as warnings only.
         if normalizedBoundaryPoints.count >= 3 {
+            CrashLogger.shared.log("didFinalizeBoundary: setting boundaryFinalized=true", category: .boundary)
             boundaryFinalized = true
-            CrashLogger.shared.log("Boundary valid — \(normalizedBoundaryPoints.count) normalized points", category: .boundary)
+            CrashLogger.shared.log("didFinalizeBoundary: boundaryFinalized set OK", category: .boundary)
         } else {
-            CrashLogger.shared.log("Boundary too few points: \(normalizedBoundaryPoints.count)", category: .boundary, level: .warning)
+            CrashLogger.shared.log("didFinalizeBoundary: too few points: \(normalizedBoundaryPoints.count)", category: .boundary, level: .warning)
         }
 
+        CrashLogger.shared.log("didFinalizeBoundary: calling BoundaryValidator.validate()", category: .boundary)
         let result = BoundaryValidator.validate(points: normalizedBoundaryPoints)
+        CrashLogger.shared.log("didFinalizeBoundary: validate returned isValid=\(result.isValid) errors=\(result.errors.count)", category: .boundary)
         validationErrors = result.errors
+        CrashLogger.shared.log("didFinalizeBoundary: validationErrors set OK", category: .boundary)
         if !result.errors.isEmpty {
             CrashLogger.shared.log("Boundary validation warnings: \(result.errors.map(\.localizedDescription))", category: .boundary, level: .warning)
         }
+        CrashLogger.shared.log("didFinalizeBoundary: COMPLETE", category: .boundary)
     }
 
     /// Auto-finalize an auto-segmented boundary with relaxed validation.
@@ -201,15 +207,18 @@ final class BoundaryDrawingViewModel: ObservableObject {
     /// skip strict self-intersection and area checks that can false-positive
     /// on machine-generated contours.
     func autoFinalizeBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
+        CrashLogger.shared.log("autoFinalizeBoundary: \(points.count) points", category: .boundary)
         normalizedBoundaryPoints = points.map { geometry.viewToSensorNormalized($0) }
 
         guard normalizedBoundaryPoints.count >= 3 else {
+            CrashLogger.shared.log("autoFinalizeBoundary: too few points \(normalizedBoundaryPoints.count)", category: .boundary, level: .warning)
             validationErrors = [.tooFewPoints(count: normalizedBoundaryPoints.count)]
             return
         }
 
         validationErrors = []
         boundaryFinalized = true
+        CrashLogger.shared.log("autoFinalizeBoundary: COMPLETE — boundaryFinalized=true", category: .boundary)
     }
 
     /// Clears boundary state without changing drawingMode.

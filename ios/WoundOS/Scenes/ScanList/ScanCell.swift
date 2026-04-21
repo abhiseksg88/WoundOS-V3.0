@@ -162,10 +162,11 @@ final class ScanCell: UITableViewCell {
 
         // Upload status
         switch scan.uploadStatus {
-        case .pending, .failed: statusDot.backgroundColor = WOColors.statusPending
-        case .uploading:        statusDot.backgroundColor = WOColors.statusUploading
-        case .uploaded:         statusDot.backgroundColor = WOColors.statusUploaded
-        case .processed:        statusDot.backgroundColor = WOColors.statusProcessed
+        case .pending, .failed:       statusDot.backgroundColor = WOColors.statusPending
+        case .uploading:              statusDot.backgroundColor = WOColors.statusUploading
+        case .uploaded,
+             .processingTimeout:      statusDot.backgroundColor = WOColors.statusUploaded
+        case .processed:              statusDot.backgroundColor = WOColors.statusProcessed
         }
 
         // Agreement badge

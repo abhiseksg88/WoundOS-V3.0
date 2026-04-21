@@ -124,6 +124,7 @@ final class ScanDetailViewModel: ObservableObject {
         case .uploaded: return "Uploaded, processing..."
         case .processed: return "Processed"
         case .failed: return "Upload failed"
+        case .processingTimeout: return "Uploaded (processing pending)"
         }
     }
 }

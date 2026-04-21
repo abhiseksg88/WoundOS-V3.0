@@ -27,6 +27,10 @@ public struct StubFirebaseAuth: FirebaseAuthProviding {
 
 /// Manages API bearer tokens: stores in Keychain, exchanges Firebase ID tokens,
 /// and refreshes on 401.
+///
+/// Concurrent refresh requests are coalesced — if multiple callers hit
+/// `refreshToken()` at the same time, only one Firebase→backend exchange
+/// runs; the others await the same result.
 public final class AuthProvider: @unchecked Sendable {
 
     private let tokenStore: TokenStoreProtocol
@@ -37,6 +41,10 @@ public final class AuthProvider: @unchecked Sendable {
     private let lock = NSLock()
     private var cachedToken: String?
     private var tokenExpiry: Date?
+
+    /// In-flight refresh task. Guarded by `lock` so concurrent callers
+    /// share a single exchange round-trip instead of firing duplicates.
+    private var activeRefreshTask: Task<String, Error>?
 
     public init(
         tokenStore: TokenStoreProtocol,
@@ -64,12 +72,36 @@ public final class AuthProvider: @unchecked Sendable {
     }
 
     /// Force a token refresh: get a new Firebase ID token, exchange it for an API JWT.
+    /// Concurrent calls are coalesced into a single exchange request.
     @discardableResult
     public func refreshToken() async throws -> String {
-        let firebaseToken = try await firebase.getFirebaseIDToken()
-        let response = try await exchangeFirebaseToken(firebaseToken)
-        cacheToken(response.token, expiresIn: TimeInterval(response.expiresIn))
-        return response.token
+        lock.lock()
+        if let existing = activeRefreshTask {
+            lock.unlock()
+            return try await existing.value
+        }
+
+        let task = Task<String, Error> { [weak self] in
+            guard let self else { throw APIError.transport(URLError(.cancelled)) }
+            let firebaseToken = try await self.firebase.getFirebaseIDToken()
+            let response = try await self.exchangeFirebaseToken(firebaseToken)
+            self.cacheToken(response.token, expiresIn: TimeInterval(response.expiresIn))
+            self.lock.lock()
+            self.activeRefreshTask = nil
+            self.lock.unlock()
+            return response.token
+        }
+        activeRefreshTask = task
+        lock.unlock()
+
+        do {
+            return try await task.value
+        } catch {
+            lock.lock()
+            activeRefreshTask = nil
+            lock.unlock()
+            throw error
+        }
     }
 
     /// Clear all token state (logout).
