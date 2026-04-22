@@ -72,24 +72,72 @@ App Target (WoundOS):
 | **WoundHealthKitSync** | HealthKit writes, longitudinal store, FHIR Observation export | WoundCore | 17.0 |
 | **WoundV5BackendClient** | Thin client for `/v5/*` endpoints (measurements, trajectories, registrations) | WoundCore, WoundNetworking | 17.0 |
 
-### Packages NOT created (scope control)
+### Packages NOT created — Detailed Justification
 
-The original V5 spec proposed `WoundCaptureKit`, `WoundSegmentationKit`, `WoundUI`, and `WoundModels` as new packages. After reviewing the existing codebase, these are **not needed as separate packages**:
+The original V5 spec proposed `WoundCaptureKit`, `WoundSegmentationKit`, `WoundUI`, and `WoundModels` as new packages. After auditing the existing codebase (6,632 lines across 45 source files), these are absorbed into existing packages. The justification follows.
 
-| Proposed | Decision | Reason |
-|----------|----------|--------|
-| WoundCaptureKit | **Extend WoundCapture** | `ARSessionManager` and `CaptureQualityMonitor` already handle LiDAR capture. Object Capture (Scan Mode) adds a parallel session type behind `@available(iOS 18.0, *)` in the same package. |
-| WoundSegmentationKit | **Extend WoundAutoSegmentation** | The `WoundSegmenter` protocol is already defined here. Adding YOLO11 detector + SAM2 Mobile segmenter as new conformers in the same package avoids a new dependency edge. |
-| WoundUI | **Not needed** | V5 uses UIKit (matching V4). New screens are added to `WoundOS/Scenes/` in the app target, not a package. SwiftUI is used only for `ObjectCaptureView` wrapper (iOS 18, inside WoundCapture). |
-| WoundModels | **Not a package** | CoreML `.mlmodelc` bundles are app-target resources, not a library. Model download/caching logic lives in a `ModelManager` utility in the app target. |
+#### Current Package Inventory
+
+| Package | Source Files | Lines | Public Types | Responsibility |
+|---------|-------------|-------|-------------|----------------|
+| WoundCore | 14 | 1,262 | 28 | Models, protocols, extensions — **zero logic, pure data** |
+| WoundCapture | 3 | 756 | 7 | ARKit session management, quality monitoring |
+| WoundBoundary | 3 | 812 | 9 | Touch drawing canvas, 2D→3D projection, boundary validation |
+| WoundMeasurement | 10 | 1,273 | 11 | 6-step mesh measurement engine, geometry utilities |
+| WoundAutoSegmentation | 8 | 1,063 | 9 | Segmenter protocol + 3 conformers (Server, CoreML, Vision) |
+| WoundNetworking | 7 | 1,466 | 32 | HTTP client, auth, upload queue, API models |
+
+#### Which Existing Packages Absorb Which V5 Responsibilities
+
+| Proposed New Package | Absorbed Into | V5 Addition | Lines Added (est.) | Coupling Analysis |
+|---------------------|---------------|-------------|-------------------|-------------------|
+| **WoundCaptureKit** | **WoundCapture** (+200 lines) | `ObjectCaptureSessionManager` — a new class behind `@available(iOS 18.0, *)` conforming to `CaptureProviderProtocol`. Shares the same protocol contract as `ARSessionManager`. | ~200 | **No new dependencies.** WoundCapture depends only on WoundCore today. Object Capture uses RealityKit (system framework), same as ARKit. The new class outputs a `CaptureSnapshot` identical to the existing one — the downstream pipeline is unaware of the capture source. No UI code, no networking code. |
+| **WoundSegmentationKit** | **WoundAutoSegmentation** (+350 lines) | `OnDeviceSegmenter` — a new `WoundSegmenter` conformer wrapping YOLO11 + SAM2 Mobile CoreML. `WoundDetector` — YOLO11 bounding-box wrapper. | ~350 | **No new dependencies.** WoundAutoSegmentation depends only on WoundCore. CoreML models are loaded via `MLModel(contentsOf:)` — the `.mlmodelc` bundles are in the app target, not this package. The package references `CoreML` (system framework) and `Vision` (already imported). No UI code, no networking code. |
+| **WoundUI** | **App target (`WoundOS/Scenes/`)** | New screens: `TissueOverlayView`, `TimelineViewController`, `WoundAssessmentViewController`, etc. | ~1,500 | V4 already places all screens in the app target. V5 follows the same pattern. UI code is never in SPM packages (packages are headless logic). This is the correct architecture — it prevents packages from importing UIKit and keeps them testable on any platform. |
+| **WoundModels** | **App target (`WoundOS/Resources/`)** | CoreML `.mlmodelc` bundles + `ModelManager` actor for loading/caching. | ~150 | Model files are resources, not libraries. The app target owns resources. `ModelManager` is an app-level utility that hands `MLModel` instances to packages via dependency injection. |
+
+#### Coupling Analysis — The Critical Constraint
+
+**"Measurement math co-located with UI or networking code" — CONFIRMED NOT HAPPENING.**
+
+| Package | Imports UIKit? | Imports Network/URLSession? | Contains UI classes? | Contains HTTP calls? |
+|---------|---------------|---------------------------|---------------------|---------------------|
+| WoundCore | NO | NO | NO | NO |
+| WoundCapture | NO (imports ARKit) | NO | NO | NO |
+| WoundBoundary | YES (BoundaryCanvasView is a UIView) | NO | YES (1 file) | NO |
+| **WoundMeasurement** | **NO** | **NO** | **NO** | **NO** |
+| WoundAutoSegmentation | NO (conditional `#if canImport(UIKit)` for JPEG conversion only) | NO | NO | NO |
+| WoundNetworking | NO | YES (URLSession) | NO | YES |
+
+**WoundMeasurement is hermetically sealed.** It imports only `Foundation`, `simd`, `CoreGraphics`, and `WoundCore`. Zero UI. Zero networking. It is pure geometry math.
+
+V5 additions to WoundMeasurement:
+- `BWATScoreCalculator.swift` — pure computation, same as `PUSHScoreCalculator.swift`
+- `ConfidenceGating.swift` — depth pixel rejection logic (pure math)
+- `RANSACPlaneFitter.swift` — outlier-robust plane fit (pure math)
+- `UnderminingDetector.swift` — horizontal pocket analysis (pure geometry)
+
+**WoundTissueKit** is the one new package that crosses a boundary: it depends on WoundCore + WoundMeasurement because it needs `ClippedMesh` (from MeshClipper) and `ProjectionUtils` (for 3D→2D projection). It does NOT depend on UIKit or WoundNetworking. Its CoreML model is loaded via `MLModel` passed in by dependency injection from the app target.
+
+#### Why NOT Separate WoundCaptureKit / WoundSegmentationKit
+
+1. **Protocol already exists.** `CaptureProviderProtocol` and `WoundSegmenter` are already the abstraction boundaries. Adding a new conformer to an existing package is a one-file addition, not an architecture change.
+
+2. **SPM package overhead.** Each new package requires: `Package.swift`, directory structure, test target, scheme wiring, CI coverage threshold. For a single-class addition (ObjectCaptureSessionManager, OnDeviceSegmenter), the overhead exceeds the code.
+
+3. **No dependency conflict.** If `ObjectCaptureSessionManager` needed to import WoundNetworking or UIKit, it would belong in a separate package. It doesn't — it imports only RealityKit (system framework) and WoundCore.
+
+4. **Line count supports colocation.** WoundCapture is 756 lines (3 files). Adding a 200-line class brings it to 956 lines — still compact. WoundAutoSegmentation is 1,063 lines (8 files). Adding 350 lines brings it to 1,413 — comparable to WoundNetworking.
 
 ### Dependency Rules (enforced by SPM)
 
-1. **WoundCore depends on nothing.** All model types, protocols, and extensions live here.
-2. **Leaf packages depend only on WoundCore** — no leaf-to-leaf imports.
-3. **WoundV5BackendClient depends on WoundCore + WoundNetworking** — it extends the existing `WoundOSClient` actor with `/v5/*` methods.
-4. **WoundTissueKit depends on WoundCore + WoundMeasurement** — it consumes `ClippedMesh` and `ProjectionUtils` to map tissue classifications onto mesh triangles.
-5. **The app target depends on everything** — it is the composition root.
+1. **WoundCore depends on nothing.** All model types, protocols, and extensions live here. Zero logic, pure data + protocols.
+2. **Leaf packages depend only on WoundCore** — no leaf-to-leaf imports. This includes WoundCapture, WoundBoundary, WoundAutoSegmentation, WoundNetworking.
+3. **WoundMeasurement depends only on WoundCore.** It contains zero UI and zero networking. V5 additions (BWAT, RANSAC, undermining, confidence gating) are pure geometry math added to this package.
+4. **WoundTissueKit (NEW) depends on WoundCore + WoundMeasurement** — it consumes `ClippedMesh` and `ProjectionUtils` to map tissue classifications onto mesh triangles. No UI, no networking.
+5. **WoundV5BackendClient (NEW) depends on WoundCore + WoundNetworking** — it extends the existing `WoundOSClient` actor with `/v5/*` methods.
+6. **WoundHealthKitSync (NEW) depends only on WoundCore** — it imports HealthKit (system framework).
+7. **The app target depends on everything** — it is the composition root. All UI lives here. All CoreML model resources live here.
 
 ### §1.1.1 — Test Infrastructure
 
@@ -195,11 +243,16 @@ All flags are stored in `UserDefaults.standard` with a `"v5_"` prefix. No Fireba
 | `v5_medgemma_narrative_enabled` | Bool | `false` | Clinical narrative, dressing recommendation, CPT/ICD-10 in results | Phase 5 |
 | `v5_healthkit_sync_enabled` | Bool | `false` | HealthKit writes + longitudinal timeline tab | Phase 6 |
 
-### FeatureFlagManager
+### FeatureFlagManager — Protocol-Backed Abstract Interface
+
+The flag API is `FeatureFlags.isEnabled(.onDeviceSegmentation)`. The backing store is hidden behind a protocol. Swapping UserDefaults → Firebase Remote Config is a single-file change (new conformer, one line in `DependencyContainer`).
 
 ```swift
-// WoundOS/Utilities/FeatureFlagManager.swift (app target, not a package)
-enum FeatureFlag: String, CaseIterable {
+// WoundOS/Utilities/FeatureFlags.swift (app target, not a package)
+
+// MARK: - Flag Definitions
+
+public enum FeatureFlag: String, CaseIterable, Sendable {
     case onDeviceSegmentation = "v5_on_device_segmentation_enabled"
     case tissueClassification = "v5_tissue_classification_enabled"
     case scanMode             = "v5_scan_mode_enabled"
@@ -207,18 +260,63 @@ enum FeatureFlag: String, CaseIterable {
     case healthkitSync        = "v5_healthkit_sync_enabled"
 }
 
-final class FeatureFlagManager {
-    static let shared = FeatureFlagManager()
+// MARK: - Abstract Store Protocol
 
-    func isEnabled(_ flag: FeatureFlag) -> Bool {
-        UserDefaults.standard.bool(forKey: flag.rawValue)
+public protocol FeatureFlagStore: Sendable {
+    func isEnabled(_ flag: FeatureFlag) -> Bool
+    func setEnabled(_ flag: FeatureFlag, _ value: Bool)
+}
+
+// MARK: - UserDefaults Backing Store (Phase 1-7)
+
+public final class UserDefaultsFlagStore: FeatureFlagStore {
+    private let defaults: UserDefaults
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
     }
 
-    func setEnabled(_ flag: FeatureFlag, _ value: Bool) {
-        UserDefaults.standard.set(value, forKey: flag.rawValue)
+    public func isEnabled(_ flag: FeatureFlag) -> Bool {
+        defaults.bool(forKey: flag.rawValue)
+    }
+
+    public func setEnabled(_ flag: FeatureFlag, _ value: Bool) {
+        defaults.set(value, forKey: flag.rawValue)
+    }
+}
+
+// MARK: - Future: Firebase Remote Config Backing Store (Phase 8+)
+//
+// final class RemoteConfigFlagStore: FeatureFlagStore {
+//     func isEnabled(_ flag: FeatureFlag) -> Bool {
+//         RemoteConfig.remoteConfig().configValue(forKey: flag.rawValue).boolValue
+//     }
+//     func setEnabled(_ flag: FeatureFlag, _ value: Bool) { /* no-op, server-driven */ }
+// }
+
+// MARK: - Singleton Accessor
+
+public enum FeatureFlags {
+    private static var store: FeatureFlagStore = UserDefaultsFlagStore()
+
+    /// Call once at app launch from DependencyContainer to inject the backing store.
+    public static func configure(store: FeatureFlagStore) {
+        self.store = store
+    }
+
+    public static func isEnabled(_ flag: FeatureFlag) -> Bool {
+        store.isEnabled(flag)
+    }
+
+    public static func setEnabled(_ flag: FeatureFlag, _ value: Bool) {
+        store.setEnabled(flag, value)
     }
 }
 ```
+
+**Callers never touch UserDefaults directly.** Every flag read in the codebase goes through `FeatureFlags.isEnabled(.xxx)`.
+
+**Swap to Firebase Remote Config:** Create `RemoteConfigFlagStore: FeatureFlagStore`, then in `DependencyContainer`: `FeatureFlags.configure(store: RemoteConfigFlagStore())`. One file created, one line changed. Zero call-site changes.
 
 ### Usage Pattern (Coordinator Level)
 
@@ -226,7 +324,7 @@ final class FeatureFlagManager {
 // In CaptureCoordinator:
 func showBoundaryDrawing(snapshot: CaptureSnapshot, quality: CaptureQualityScore?) {
     let segmenter: WoundSegmenter?
-    if FeatureFlagManager.shared.isEnabled(.onDeviceSegmentation) {
+    if FeatureFlags.isEnabled(.onDeviceSegmentation) {
         segmenter = dependencies.onDeviceSegmenter  // YOLO11 + SAM2 Mobile
     } else {
         segmenter = dependencies.autoSegmenter       // V4 chain (Server → CoreML → Vision)
@@ -245,8 +343,9 @@ func showBoundaryDrawing(snapshot: CaptureSnapshot, quality: CaptureQualityScore
 
 1. **No PHI in UserDefaults.** Flags are booleans only. No patient data, tokens, or identifiers.
 2. **Flags gate at coordinator level**, not inside ViewModels or packages. Packages are always capable; the coordinator decides which capability to use.
-3. **Flags are developer-only for now.** Internal TestFlight builds can toggle via a hidden debug menu (triple-tap version label in Settings). Public release flags are `false` until explicitly flipped.
-4. **Migration to Firebase Remote Config** happens when real Firebase Auth is integrated (Phase 1/2). The `FeatureFlagManager` API stays the same; only the backing store changes.
+3. **All flag reads go through `FeatureFlags.isEnabled()`** — never `UserDefaults.standard.bool(forKey:)` directly. This is enforced by code review and a lint rule (grep for `UserDefaults.*v5_` outside `UserDefaultsFlagStore`).
+4. **Flags are developer-only for now.** Internal TestFlight builds can toggle via a hidden debug menu (triple-tap version label in Settings). Public release flags are `false` until explicitly flipped.
+5. **Migration to Firebase Remote Config** happens post-Phase 7. The `FeatureFlagStore` protocol ensures this is a single-file change.
 
 ---
 
@@ -344,9 +443,50 @@ actor ModelManager {
 }
 ```
 
-**Phase 3 approach:** Bundle models in the app target. Total IPA size increase ~60 MB (acceptable for clinical app, avoids first-launch download UX).
+### Model Delivery: App Thinning + Asset Catalogs
 
-**Future (post-Phase 3):** If model size becomes a concern, migrate to on-demand download via `URLSession` background transfer + compile with `MLModel.compileModel(at:)` + cache in `Application Support/Models/`. The `ModelManager` API stays the same.
+Models are placed in **Asset Catalogs** (`WoundOS/Resources/Assets.xcassets`) as data assets with device variant tags:
+
+```
+Assets.xcassets/
+  ├── WoundDetectorYOLO11n.mlmodelc/     (6 MB, all devices)
+  ├── SAM2MobileTiny.mlmodelc/           (40 MB, all devices)
+  └── TissueClassifierFPN.mlmodelc/      (50 MB, all devices)
+```
+
+**App Thinning behavior:** Xcode compiles `.mlmodel` → `.mlmodelc` at build time. The App Store generates per-device variants via App Thinning. CoreML models are already architecture-specific (ANE vs GPU vs CPU compute plans are compiled per chip). The App Store delivers only the variant matching the user's device.
+
+**Effective download size:** ~60 MB compressed (from 96 MB uncompressed). Acceptable for a clinical app that requires LiDAR hardware (iPhone 12 Pro+ users are on high-bandwidth plans).
+
+### Model Versioning & OTA Update Path
+
+**Phase 3 posture: Models updated only via App Store release.**
+
+This is the defensible posture for a 510(k) submission. Rationale:
+
+1. **FDA traceability:** Each App Store version has a deterministic binary. Model weights are part of the verified build artifact. OTA model swaps create a combinatorial verification matrix.
+2. **Reproducibility:** Any measurement can be traced to a specific app version containing specific model weights.
+3. **App Review gate:** Apple reviews each submission, providing a third-party validation checkpoint.
+
+**Documented for 510(k):**
+> "WoundOS V5 clinical measurement models (YOLO11n wound detector v1.0, SAM2 Mobile segmenter v1.0, FPN tissue classifier v1.0) are embedded in the application binary and updated exclusively via App Store releases. Each release undergoes verification against the golden test set (§7.2) before submission. No over-the-air model updates occur outside the App Store release process."
+
+**Post-510(k) OTA path (future, not Phase 3):**
+
+When clinical validation processes mature and the quality system supports it, models can be moved to background download:
+
+```swift
+// Future ModelManager extension (NOT Phase 3):
+func downloadModel(_ id: ModelID, from url: URL) async throws -> MLModel {
+    // 1. Background URLSession download from Cloud Run/GCS
+    // 2. Verify SHA-256 checksum against pinned manifest
+    // 3. MLModel.compileModel(at: downloadedURL)
+    // 4. Cache in Application Support/Models/{version}/
+    // 5. Log model version change to audit trail
+}
+```
+
+This would require a software change notice (SCN) in the quality management system and re-verification of the affected measurement outputs.
 
 ### SAM2 Mobile CoreML Conversion Strategy
 
@@ -356,9 +496,52 @@ SAM2 Mobile (Hiera Tiny) must be converted from PyTorch → CoreML:
 2. Export mask decoder separately (it takes encoder features + point/box prompts)
 3. Validate: mean IoU on wound test set must be ≥ 0.80 (vs PyTorch reference)
 4. Quantize to Float16 (ANE compatible, ~50% size reduction)
-5. **Fallback:** If conversion fails or accuracy drops below threshold, V5 falls back to `VisionForegroundSegmenter` (iOS 17+) or `ServerSegmenter` (GrabCut). The `WoundSegmenter` protocol makes this a one-line swap in `DependencyContainer`.
+5. **Fallback:** See §1.3.1 below for explicit fallback decision criteria.
 
 **Risk budget:** 2 weeks for conversion + validation. Owner: Agent (Phase 3).
+
+### §1.3.1 — SAM2 Conversion Fallback: Explicit Decision Criteria
+
+**Fallback trigger — ANY of these conditions:**
+
+| Condition | Threshold | Measurement Method |
+|-----------|-----------|-------------------|
+| CoreML conversion fails outright | Conversion error / unsupported op | `coremltools` error log |
+| Inference latency on iPhone 14 Pro | > 1.2 seconds per image | Median of 50 inferences on device, 1080×1080 input |
+| Golden set IoU (wound boundary) | < 0.72 mean IoU | 50-image golden set, IoU vs PyTorch reference masks |
+| Calendar time elapsed | > 10 business days from conversion start | Calendar |
+
+**If fallback is triggered:**
+
+The `v5_on_device_segmentation_enabled` flag stays `false`. The segmenter chain remains:
+
+```
+ServerSegmenter (GrabCut backend) → VisionForegroundSegmenter (iOS 17+) → nil
+```
+
+**Fallback UX impact:**
+
+| Feature | With SAM2 Mobile | With VisionForegroundSegmenter Fallback |
+|---------|-----------------|----------------------------------------|
+| **Tap-to-segment** | Yes — tap = SAM2 point prompt | Yes — tap selects foreground instance under point |
+| **Tap-to-refine** (iterative) | Yes — additional taps add/remove point prompts, mask updates | **DEGRADED** — VisionForegroundSegmenter is one-shot. Additional taps re-run full segmentation, no incremental refinement. |
+| **Bounding-box prompt** | Yes — YOLO11 bbox feeds SAM2 | **GONE** — Vision API has no box prompt. Falls back to instance selection by tap point only. |
+| **Expected IoU on wound images** | 0.80+ (wound-trained) | ~0.55-0.65 (generic foreground, not wound-specific) |
+| **Clinician correction flow** | Tap adds/removes SAM2 prompts → refined mask | **Falls back to "Draw Manually" mode** — nurse switches to freeform drawing. The boundary drawing screen already has this toggle ("Auto Detect" / "Draw Manually"). |
+| **User-visible messaging** | "Boundary detected (AI)" | "Boundary detected (on-device)" + yellow banner: "For best results, adjust the boundary manually" |
+
+**Measurement accuracy impact of fallback:**
+
+| Metric | SAM2 Mobile (expected) | VisionForegroundSegmenter (measured V4) | Delta |
+|--------|----------------------|----------------------------------------|-------|
+| Boundary IoU | 0.80+ | 0.55-0.65 | -20-25% |
+| Area error | ≤5% | 15-30% (over-segments, includes periwoound skin) | Significant |
+| Depth error | ≤2mm | ≤3mm (boundary error propagates to plane fit) | Moderate |
+| Volume error | ≤10% | 20-40% | Significant |
+
+**Mitigation in fallback scenario:** The nurse can always correct the boundary manually. The "Draw Manually" mode is the clinical safety net — it produces nurse-drawn boundaries that are 100% under clinician control. The measurement pipeline is boundary-agnostic; it measures whatever boundary it receives.
+
+**Decision authority:** Fallback decision is made by the agent at Phase 3 GATE, with the golden set IoU numbers posted to the PR. Owner reviews before the flag is flipped.
 
 ### Backend SAM2 Deprecation Plan
 
@@ -474,44 +657,90 @@ public enum CaptureMode: String, Codable {
 
 ---
 
-## §1.5 — Measurement Pipeline V5 Extensions
+## §1.5 — Measurement Pipeline: V4 Gap Analysis + V5 Spec
 
-### Existing 6-Step Pipeline (UNCHANGED)
+### Side-by-Side: V5 Spec vs V4 Implementation
+
+| Step | V5 Specification (§1.4) | V4 Implementation | Status | V5 Action |
+|------|------------------------|-------------------|--------|-----------|
+| 1 | Reject low-confidence depth pixels | **PARTIAL.** `BoundaryProjector` filters confidence ≥ 2 (high only) during 2D→3D projection fallback, but ray-mesh primary path skips depth entirely. ARKit mesh vertices have no per-vertex confidence exposed. Interior mesh vertices used by the engine have no confidence gating. | GAP | Add `ConfidenceGatedProjector` that rejects boundary points where depth-map fallback confidence < 2 and mesh hit fails. Expose `projectionConfidence` per-point so the engine can weight or exclude low-confidence regions. |
+| 2 | Back-project 2D through intrinsics | **YES.** `BoundaryProjector.project()` computes inverse intrinsics → camera ray → Möller-Trumbore ray-mesh intersection, with depth-map unprojection fallback. File: `BoundaryProjector.swift:59-103` | OK | Retain. No change needed. |
+| 3 | Dilate mask + RANSAC skin plane | **NO RANSAC.** `TriangleUtils.fitPlane()` uses closed-form least-squares covariance eigendecomposition (no outlier rejection). A single bad boundary point can skew the reference plane. No mask dilation. File: `TriangleUtils.swift:56-107` | GAP | **Replace** with RANSAC plane fitter in `WoundMeasurement/GeometryUtils/RANSACPlaneFitter.swift`. Parameters: 100 iterations, 3-point sample, 5mm inlier threshold. Falls back to current least-squares if RANSAC fails (< 60% inlier rate). Add mask dilation (3px morphological dilate) in the segmentation pipeline before boundary extraction. |
+| 4 | Rotate so skin plane = XY | **PARTIAL.** `DimensionCalculator` projects to local (u,v) plane basis for L×W. Area, depth, and volume work in world space using signed distances. File: `DimensionCalculator.swift:95-114` | OK | World-space computation is geometrically correct (signed distance to plane = perpendicular depth regardless of frame). No change needed — rotating to XY is an implementation detail, not a correctness requirement. |
+| 5a | Geodesic surface area (mesh, not planar) | **YES.** `MeshClipper` sums actual 3D triangle areas via cross-product (`TriangleUtils.triangleArea`). This is the true piecewise-linear geodesic area on the reconstructed mesh surface. File: `MeshClipper.swift:87,114` | OK | Retain. This is already superior to planar projection. |
+| 5b | Max length/width via PCA | **NO PCA.** Uses rotating calipers on the minimum bounding rectangle of the convex hull (Graham scan). File: `DimensionCalculator.swift:47-74` | ACCEPTABLE | Rotating calipers gives the **exact** minimum bounding rectangle; PCA gives an approximation. Rotating calipers is strictly more accurate for L×W. Retain current method. |
+| 5c | Max depth perpendicular to skin plane | **YES.** `DepthCalculator.computeDepth()` computes `dot(vertex - centroid, planeNormal)` for every interior mesh vertex. Plane normal oriented toward camera. File: `DepthCalculator.swift:56-64` | OK | Retain. V5 upgrade: use RANSAC plane (from Step 3 fix) as the reference instead of least-squares plane. |
+| 5d | Volume via prism integration + TSDF cross-check | **PRISM ONLY.** `VolumeCalculator` decomposes triangular prisms into tetrahedra using signed volume formula. No TSDF. No cross-check. File: `VolumeCalculator.swift:27-53` | GAP | Add TSDF cross-check as a secondary volume estimate. Algorithm: voxelize the depth difference between mesh surface and reference plane at 1mm resolution, sum voxel volumes. If prism and TSDF disagree by >15%, flag `volumeConfidence = .low` in the measurement output. New file: `TSDFVolumeValidator.swift` in WoundMeasurement. |
+| 5e | Undermining flag (>5mm horizontal pocket) | **MISSING.** No undermining detection in the codebase. | GAP | New file: `UnderminingDetector.swift` in WoundMeasurement. Algorithm: for each boundary point, cast rays inward along the plane surface at 1° increments. If any ray encounters mesh geometry more than 5mm below the reference plane AND extends >5mm horizontally past the boundary, flag `underminingDetected = true` with clock position and extent. Phase 4 deliverable — requires nurse annotation UI for clock positions. |
+| 6 | Confidence score from high-conf pixel % | **ADVISORY ONLY.** `CaptureQualityScore` computes `meanDepthConfidence` (0-2) and `meshHitRate` (0-1) and derives a tier (excellent/good/fair/poor). But the tier is purely informational — a `.poor` measurement still proceeds and is stored. File: `CaptureQualityScore.swift:57-72` | GAP | **Promote to gating.** If `meshHitRate < 0.70` OR `meanDepthConfidence < 1.0`, measurement is blocked with user-visible message: "Insufficient depth data — move closer or adjust angle." If `meshHitRate < 0.85`, measurement proceeds but `qualityGate = .warning` is stamped on the result. Confidence score formula: `confidenceScore = (meshHitRate * 0.6) + (meanDepthConfidence / 2.0 * 0.4)` → range 0-1. |
+
+### V5 Measurement Pipeline (Revised)
 
 ```
-Step 1: MeshClipper.clip()           → ClippedMesh
-Step 2: AreaCalculator.computeArea() → Double (cm²)
-Step 3: DepthCalculator.compute()    → DepthResult (max/mean depth, reference plane)
-Step 4: VolumeCalculator.compute()   → Double (mL)
-Step 5: PerimeterCalculator.compute()→ Double (mm)
-Step 6: DimensionCalculator.compute()→ DimensionResult (L × W)
+Step 0:  ConfidenceGating.validate(projectionResult)     → Pass/Block     [NEW]
+Step 1:  MeshClipper.clip(captureData, boundary)          → ClippedMesh    [V4, unchanged]
+Step 2:  AreaCalculator.computeArea(clippedMesh)           → Double (cm²)   [V4, unchanged]
+Step 2b: TissueClassifier.classify(rgb, mask, clippedMesh) → TissueComposition [NEW, PARALLEL BRANCH — see below]
+Step 3:  RANSACPlaneFitter.fitPlane(boundaryPoints3D)     → PlaneResult    [V5 REPLACES least-squares]
+Step 4:  DepthCalculator.computeDepth(mesh, plane)        → DepthResult    [V4, uses RANSAC plane]
+Step 5:  VolumeCalculator.computeVolume(mesh, plane)      → Double (mL)    [V4, uses RANSAC plane]
+Step 5v: TSDFVolumeValidator.validate(mesh, plane, prismVol) → VolumeConfidence [NEW cross-check]
+Step 5e: UnderminingDetector.detect(mesh, boundary, plane) → UnderminingResult [NEW, Phase 4]
+Step 6:  PerimeterCalculator.computePerimeter(boundary3D) → Double (mm)    [V4, unchanged]
+Step 7:  DimensionCalculator.computeDimensions(boundary3D, plane) → DimensionResult [V4, unchanged]
+Step 8:  BWATCalculator.compute(measurement, tissue, nurseInputs) → BWATScore [NEW]
+Step 9:  ConfidenceScore.compute(projectionResult, quality) → Float (0-1) [NEW]
 ```
 
-**No modifications to the existing pipeline.** V5 features are additive steps that consume the same intermediate results.
+### Tissue Classification: Parallel Branch (NOT in the 3D geometry chain)
 
-### V5 Extension Steps
+**Critical clarification:** Tissue classification runs on 2D masked RGB, not on back-projected 3D points. It is a parallel branch, not a dependency in the 3D geometry chain.
 
 ```
-Step 2b: TissueClassifier.classify()  → TissueComposition    [NEW, parallel to Step 2]
-Step 6b: BWATCalculator.compute()     → BWATScore             [NEW, after Step 6]
-Step 6c: UnderminingCalculator.compute() → UnderminingResult   [NEW, after Step 6]
+                  CaptureSnapshot (frozen RGB + depth + mesh)
+                         │
+           ┌─────────────┴─────────────┐
+           │                           │
+     3D Geometry Chain            2D RGB Branch
+     (Steps 0-9 above)           (Tissue Classification)
+           │                           │
+           │                     ┌─────┴──────┐
+           │                     │ RGB Image   │
+           │                     │ + Binary    │
+           │                     │   Mask from │
+           │                     │   segmenter │
+           │                     └─────┬──────┘
+           │                           │
+           │                     TissueClassifier
+           │                     CoreML inference
+           │                     (FPN+VGG16)
+           │                           │
+           │                     H×W×6 probability map
+           │                           │
+           │                     Sample at ClippedMesh
+           │                     triangle centroids
+           │                     (3D→2D projection)
+           │                           │
+           │                     TissueComposition
+           │                     (area per class in cm²)
+           │                           │
+           └───────────┬───────────────┘
+                       │
+                 WoundMeasurement + TissueComposition
+                       │
+                 BWATCalculator (Step 8)
+                       │
+                 WoundScan (fully assembled)
 ```
 
-### Step 2b: Tissue Classification
+**Tissue classification depends on:**
+1. The RGB image (available immediately after capture)
+2. The binary segmentation mask (available after auto-seg or manual boundary)
+3. `ClippedMesh` triangle centroids (available after Step 1, for mapping 2D classes to 3D area)
 
-**Package:** WoundTissueKit
+**Tissue classification does NOT depend on:** Steps 3-9 (plane fitting, depth, volume, dimensions). It can run concurrently with the 3D geometry chain.
 
-**Input:** `ClippedMesh` (from Step 1) + `CGImage` (frozen RGB) + camera intrinsics/transform
-
-**Algorithm:**
-
-1. Run TissueClassifier CoreML model on the RGB image → `H×W×6` probability map (6 tissue classes)
-2. For each triangle in `ClippedMesh`:
-   a. Project triangle centroid to 2D image space (reuse `MeshClipper.projectVerticesToImage()` logic)
-   b. Sample tissue probability map at that pixel
-   c. Assign dominant tissue class to the triangle
-   d. Accumulate triangle area by tissue class
-3. Output: `TissueComposition`
+**Package:** WoundTissueKit (depends on WoundCore + WoundMeasurement for `ClippedMesh` and `ProjectionUtils`)
 
 ```swift
 // In WoundCore:
@@ -523,75 +752,60 @@ public struct TissueComposition: Codable, Sendable {
 }
 
 public enum TissueClass: String, Codable, CaseIterable, Sendable {
-    case granulation
-    case slough
-    case necrosis
-    case eschar
-    case epithelialization
-    case maceration
+    case granulation, slough, necrosis, eschar, epithelialization, maceration
 }
 ```
 
-### Step 6b: BWAT Score (Bates-Jensen Wound Assessment Tool)
+### BWAT Score (Step 8)
 
-**Package:** WoundMeasurement (extend existing)
-
-**Input:** `WoundMeasurement` (from Steps 1-6) + `TissueComposition` (from Step 2b) + nurse-observed parameters
-
-**Algorithm:** Pure computation — 13 subscales, each scored 1-5:
+**Package:** WoundMeasurement (extend existing — pure computation, zero UI/network)
 
 | Subscale | Source | Input |
 |----------|--------|-------|
 | 1. Size | Auto | `areaCm2` from Step 2 |
-| 2. Depth | Auto | `maxDepthMm` from Step 3 |
+| 2. Depth | Auto | `maxDepthMm` from Step 4 |
 | 3. Edges | Nurse | Enum: distinct/attached/not attached/rolled/undermining |
-| 4. Undermining | Auto/Nurse | `UnderminingResult` if available, else nurse input |
+| 4. Undermining | Auto/Nurse | `UnderminingResult` (Phase 4) or nurse input |
 | 5. Necrotic tissue type | Auto | `TissueComposition.fractionByClass[.necrosis]` + `[.eschar]` |
 | 6. Necrotic tissue amount | Auto | Sum of necrotic fractions |
 | 7. Exudate type | Nurse | Enum: none/bloody/serosanguineous/serous/purulent |
-| 8. Exudate amount | Nurse | Enum: none/scant/small/moderate/large (reuse PUSH field) |
+| 8. Exudate amount | Nurse | Enum: none/scant/small/moderate/large |
 | 9. Skin color surrounding | Nurse | Enum: pink/bright red/white/dark red/purple/black |
 | 10. Peripheral tissue edema | Nurse | Enum: none/non-pitting/<4cm/≥4cm/crepitus |
 | 11. Peripheral tissue induration | Nurse | Enum: none/≤2cm/2-4cm/>4cm |
 | 12. Granulation tissue | Auto | `TissueComposition.fractionByClass[.granulation]` |
 | 13. Epithelialization | Auto | `TissueComposition.fractionByClass[.epithelialization]` |
 
-**Output:**
-
 ```swift
 public struct BWATScore: Codable, Sendable {
     public let subscales: [BWATSubscale: Int]  // 1-5 each
     public let totalScore: Int                  // 13-65
-    public let autoScoredCount: Int            // How many subscales were auto-scored
+    public let autoScoredCount: Int
 }
 ```
 
-**Total score range:** 13 (best/healed) to 65 (worst). BWAT > 13 indicates an active wound.
+### New Files in WoundMeasurement (V5)
 
-### Step 6c: Undermining (Future — Phase 4)
+| File | Lines (est.) | Purpose | Dependencies |
+|------|-------------|---------|-------------|
+| `RANSACPlaneFitter.swift` | ~120 | RANSAC plane fit with 100 iterations, 3-point sample, 5mm inlier threshold | simd, Foundation |
+| `TSDFVolumeValidator.swift` | ~100 | Voxelized volume cross-check at 1mm resolution | simd, Foundation |
+| `UnderminingDetector.swift` | ~150 | Horizontal pocket detection via boundary-inward raycasting | simd, Foundation |
+| `ConfidenceGating.swift` | ~60 | Pre-measurement gate: block if meshHitRate < 0.70 or confidence < 1.0 | WoundCore (CaptureQualityScore) |
+| `BWATScoreCalculator.swift` | ~80 | Bates-Jensen 13-subscale computation | WoundCore (BWATScore model) |
 
-Undermining measurement requires nurse annotation of clock positions and extent. This is a Phase 4 feature that consumes `DepthResult.referencePlanePoint/Normal` and the `ClippedMesh` to detect sub-surface cavities at wound margins.
+**All new files: pure geometry/math. Zero UI. Zero networking. Zero CoreML.**
 
-### MeshMeasurementEngine Extension
+### ClippedMesh Exposure
 
-The engine's `measure()` method returns a `WoundMeasurement`. V5 does NOT modify this method. Instead, the `BoundaryDrawingViewModel` calls the tissue classifier and BWAT calculator separately after the engine returns:
-
-```swift
-// In BoundaryDrawingViewModel.computeMeasurements():
-// 1. Existing: engine.measure(captureData, boundary, quality) → WoundMeasurement
-// 2. V5 NEW: tissueClassifier.classify(clippedMesh, rgbImage, intrinsics) → TissueComposition
-// 3. V5 NEW: bwatCalculator.compute(measurement, tissue, nurseInputs) → BWATScore
-// 4. Assemble WoundScan with all results
-```
-
-The `ClippedMesh` is currently internal to the engine. To expose it for tissue classification, the engine will provide an additional method:
+`ClippedMesh` is currently internal to the engine. To expose it for tissue classification:
 
 ```swift
 // In MeshMeasurementEngine:
 public func clipMesh(captureData: CaptureData, boundary: WoundBoundary) throws -> ClippedMesh
 ```
 
-This extracts Step 1 as a standalone callable, reusing existing code. The full `measure()` method calls this internally as before.
+The full `measure()` method calls this internally as before. `WoundTissueKit` calls `clipMesh()` separately to get triangle centroids for 2D sampling.
 
 ---
 
