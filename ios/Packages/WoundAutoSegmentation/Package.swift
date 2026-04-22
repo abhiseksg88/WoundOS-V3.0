@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "WoundAutoSegmentation",
-    platforms: [.iOS(.v16)],
+    platforms: [.iOS(.v17)],
     products: [
         .library(name: "WoundAutoSegmentation", targets: ["WoundAutoSegmentation"]),
     ],

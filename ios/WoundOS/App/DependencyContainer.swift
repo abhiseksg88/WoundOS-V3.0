@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import WoundCore
 import WoundCapture
 import WoundMeasurement
@@ -11,11 +12,31 @@ import WoundAutoSegmentation
 /// Created once at app launch, passed to coordinators.
 final class DependencyContainer {
 
-    // MARK: - Capture
+    // MARK: - Feature Flags
+
+    lazy var featureFlagStore: FeatureFlagStore = UserDefaultsFlagStore()
+
+    // MARK: - Capture (V4, always available)
 
     lazy var captureProvider: CaptureProviderProtocol = {
-        CrashLogger.shared.log("Initializing ARSessionManager", category: .capture)
+        CrashLogger.shared.log("Initializing ARSessionManager (V4)", category: .capture)
         return ARSessionManager()
+    }()
+
+    // MARK: - V5 Capture (only initialized when flag is ON)
+
+    lazy var v5CaptureSession: LiDARCaptureSession? = {
+        guard FeatureFlags.isEnabled(.v5LidarCapture) else { return nil }
+        CrashLogger.shared.log("Initializing LiDARCaptureSession (V5)", category: .capture)
+        return LiDARCaptureSession()
+    }()
+
+    // MARK: - V5 Persistence (only initialized when flag is ON)
+
+    lazy var captureBundleStore: SwiftDataCaptureBundleStore? = {
+        guard FeatureFlags.isEnabled(.v5LidarCapture) else { return nil }
+        CrashLogger.shared.log("Initializing SwiftData CaptureBundle store (V5)", category: .storage)
+        return try? SwiftDataCaptureBundleStore()
     }()
 
     // MARK: - Measurement
