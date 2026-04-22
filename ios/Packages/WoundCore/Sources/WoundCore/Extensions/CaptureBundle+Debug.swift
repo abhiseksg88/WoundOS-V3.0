@@ -1,4 +1,5 @@
-#if DEBUG
+// GATE 2 smoke test instrumentation — kept in Release for TestFlight validation.
+// Will be moved back behind #if DEBUG after GATE 2 sign-off.
 import Foundation
 import simd
 
@@ -215,4 +216,3 @@ extension CaptureBundle {
         return lines.joined(separator: "\n")
     }
 }
-#endif

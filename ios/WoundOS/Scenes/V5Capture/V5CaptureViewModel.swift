@@ -18,10 +18,9 @@ final class V5CaptureViewModel: ObservableObject {
     @Published var currentDistanceM: Float?
     @Published var error: String?
 
-    #if DEBUG
+    // GATE 2 smoke test — available in Release for TestFlight validation
     @Published var lastCaptureBundle: CaptureBundle?
     @Published var dumpToastMessage: String?
-    #endif
 
     // MARK: - Navigation
 
@@ -126,9 +125,7 @@ final class V5CaptureViewModel: ObservableObject {
                 )
             )
 
-            #if DEBUG
             lastCaptureBundle = bundle
-            #endif
 
             onCaptureComplete?(bundle)
         } catch {
@@ -136,7 +133,6 @@ final class V5CaptureViewModel: ObservableObject {
         }
     }
 
-    #if DEBUG
     func dumpBundle() {
         guard let bundle = lastCaptureBundle else { return }
         let output = bundle.debugDescription(verbose: true)
@@ -152,7 +148,6 @@ final class V5CaptureViewModel: ObservableObject {
             dumpToastMessage = "Dumped to console (file write failed)"
         }
     }
-    #endif
 
     // MARK: - Bindings
 

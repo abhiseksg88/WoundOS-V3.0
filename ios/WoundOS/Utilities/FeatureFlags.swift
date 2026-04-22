@@ -30,6 +30,10 @@ public final class UserDefaultsFlagStore: FeatureFlagStore, @unchecked Sendable 
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // Register defaults: V5 LiDAR capture ON for dev TestFlight builds
+        defaults.register(defaults: [
+            FeatureFlag.v5LidarCapture.rawValue: true,
+        ])
     }
 
     public func isEnabled(_ flag: FeatureFlag) -> Bool {

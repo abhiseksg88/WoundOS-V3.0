@@ -28,11 +28,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         CrashLogger.shared.log("Feature flags configured, v5LidarCapture=\(FeatureFlags.isEnabled(.v5LidarCapture))", category: .app)
 
-        #if DEBUG
         if FeatureFlags.isEnabled(.v5LidarCapture) {
             Self.printV5LaunchBanner()
         }
-        #endif
 
         let window = UIWindow(windowScene: windowScene)
         CrashLogger.shared.log("DependencyContainer created", category: .app)
@@ -62,7 +60,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         CrashLogger.shared.log("Scene entered background", category: .app)
     }
 
-    #if DEBUG
     private static func printV5LaunchBanner() {
         let device = UIDevice.current
         let lidarAvailable: Bool = {
@@ -72,7 +69,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return false
             #endif
         }()
+        #if DEBUG
         let buildConfig = "DEBUG"
+        #else
+        let buildConfig = "RELEASE"
+        #endif
         print("""
         ================================================================
         WoundOS V5 — LiDAR Capture Mode ENABLED
@@ -84,5 +85,4 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         ================================================================
         """)
     }
-    #endif
 }

@@ -75,8 +75,7 @@ struct V5CaptureView: View {
             }
             .padding(.horizontal)
 
-            // Debug: Dump Bundle button (bottom-right)
-            #if DEBUG
+            // Dump Bundle button (bottom-right) — GATE 2 smoke test
             VStack {
                 Spacer()
                 HStack {
@@ -95,7 +94,6 @@ struct V5CaptureView: View {
                     .padding(.bottom, 60)
                 }
             }
-            #endif
         }
         .accessibilityIdentifier("v5_capture_screen")
         .alert("Capture Error", isPresented: .init(
@@ -106,7 +104,6 @@ struct V5CaptureView: View {
         } message: {
             Text(viewModel.error ?? "")
         }
-        #if DEBUG
         .overlay(alignment: .top) {
             if let toast = viewModel.dumpToastMessage {
                 Text(toast)
@@ -123,6 +120,5 @@ struct V5CaptureView: View {
                     }
             }
         }
-        #endif
     }
 }
