@@ -111,6 +111,7 @@ public final class MeshMeasurementEngine {
         // Step 3: Depth — pass the REAL camera position so plane normal orients
         //          outward (toward camera).  This is the critical bug fix.
         let cameraPosition = cameraTransform.translation
+        logger.info("Step 3: Depth — camera=(\(cameraPosition.x), \(cameraPosition.y), \(cameraPosition.z)), boundary3D=\(points3D.count), interiorVerts=\(clippedMesh.vertices.count)")
         let depthResult = DepthCalculator.computeDepth(
             boundaryPoints3D: points3D,
             interiorVertices: clippedMesh.vertices,
@@ -119,6 +120,12 @@ public final class MeshMeasurementEngine {
 
         let maxDepthMm = depthResult?.maxDepthMm ?? 0
         let meanDepthMm = depthResult?.meanDepthMm ?? 0
+
+        if let dr = depthResult {
+            logger.info("Depth OK: max=\(dr.maxDepthMm)mm mean=\(dr.meanDepthMm)mm below=\(dr.belowPlaneCount) above=\(dr.abovePlaneCount) reliable=\(dr.isReliable)")
+        } else {
+            logger.warning("Depth returned nil — plane fit failed or no boundary points")
+        }
 
         // Step 4: Volume relative to fitted plane
         var volumeMl: Double = 0
@@ -130,8 +137,11 @@ public final class MeshMeasurementEngine {
             )
         }
 
-        // Step 5: Perimeter from 3D boundary points
+        // Step 5: Perimeter from 3D boundary points (with smoothing)
+        let rawPerimeterMm = PerimeterCalculator.computeRawPerimeter(points3D: points3D)
         let perimeterMm = PerimeterCalculator.computePerimeter(points3D: points3D)
+        let reductionPct = rawPerimeterMm > 0 ? (1.0 - perimeterMm / rawPerimeterMm) * 100.0 : 0
+        logger.info("Step 5: Perimeter — raw=\(rawPerimeterMm)mm smoothed=\(perimeterMm)mm reduction=\(reductionPct)%")
 
         // Step 6: Length and width via rotating calipers — KEEP THE ENDPOINTS
         let dimensions: DimensionCalculator.DimensionResult
