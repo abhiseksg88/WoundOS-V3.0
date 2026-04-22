@@ -18,5 +18,10 @@ let package = Package(
             ],
             path: "Sources/WoundNetworking"
         ),
+        .testTarget(
+            name: "WoundNetworkingTests",
+            dependencies: ["WoundNetworking"],
+            path: "Tests/WoundNetworkingTests"
+        ),
     ]
 )

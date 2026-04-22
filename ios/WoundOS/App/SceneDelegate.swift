@@ -10,10 +10,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         willConnectTo session: UISceneSession,
         options connectionOptions: UIScene.ConnectionOptions
     ) {
-        guard let windowScene = scene as? UIWindowScene else { return }
+        CrashLogger.shared.log("Scene willConnectTo — creating DependencyContainer", category: .app)
+        guard let windowScene = scene as? UIWindowScene else {
+            CrashLogger.shared.error("Failed to cast scene to UIWindowScene", category: .app)
+            return
+        }
 
         let window = UIWindow(windowScene: windowScene)
         let container = DependencyContainer()
+        CrashLogger.shared.log("DependencyContainer created", category: .app)
         let navigationController = UINavigationController()
 
         appCoordinator = AppCoordinator(
@@ -25,5 +30,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = navigationController
         window.makeKeyAndVisible()
         self.window = window
+        CrashLogger.shared.log("Scene setup complete, window visible", category: .app)
+    }
+
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        CrashLogger.shared.log("Scene did become active", category: .app)
+    }
+
+    func sceneWillResignActive(_ scene: UIScene) {
+        CrashLogger.shared.log("Scene will resign active", category: .app)
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        CrashLogger.shared.log("Scene entered background", category: .app)
     }
 }

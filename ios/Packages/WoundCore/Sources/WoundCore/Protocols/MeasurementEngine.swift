@@ -16,7 +16,6 @@ public protocol MeasurementEngineProtocol {
         boundary: WoundBoundary,
         vertices: [SIMD3<Float>],
         faces: [SIMD3<UInt32>],
-        normals: [SIMD3<Float>],
         cameraIntrinsics: simd_float3x3,
         cameraTransform: simd_float4x4,
         imageWidth: Int,

@@ -17,14 +17,30 @@ final class CaptureCoordinator: Coordinator {
     }
 
     func start() {
+        CrashLogger.shared.log("CaptureCoordinator.start()", category: .coordinator)
         showCapture()
     }
 
     // MARK: - Step 1: AR Capture
 
     private func showCapture() {
+        CrashLogger.shared.log("Navigating to AR Capture screen", category: .coordinator)
         let viewModel = CaptureViewModel(captureProvider: dependencies.captureProvider)
         viewModel.onCaptureComplete = { [weak self] snapshot, qualityScore in
+            CrashLogger.shared.log("Capture complete — transitioning to Boundary Drawing", category: .coordinator)
+            CrashLogger.shared.logDiagnostics("Capture Snapshot", category: .capture, data: [
+                "imageWidth": snapshot.imageWidth,
+                "imageHeight": snapshot.imageHeight,
+                "depthWidth": snapshot.depthWidth,
+                "depthHeight": snapshot.depthHeight,
+                "vertexCount": snapshot.vertices.count,
+                "faceCount": snapshot.faces.count,
+                "normalCount": snapshot.normals.count,
+                "depthMapSize": snapshot.depthMap.count,
+                "confidenceMapSize": snapshot.confidenceMap.count,
+                "rgbDataSize": snapshot.rgbImageData.count,
+                "device": snapshot.deviceModel,
+            ])
             self?.showBoundaryDrawing(snapshot: snapshot, qualityScore: qualityScore)
         }
 
@@ -36,6 +52,15 @@ final class CaptureCoordinator: Coordinator {
     // MARK: - Step 2: Boundary Drawing
 
     private func showBoundaryDrawing(snapshot: CaptureSnapshot, qualityScore: CaptureQualityScore?) {
+        CrashLogger.shared.log("Navigating to Boundary Drawing screen", category: .coordinator)
+        if let q = qualityScore {
+            CrashLogger.shared.logDiagnostics("Pre-Capture Quality", category: .capture, data: [
+                "trackingStableSeconds": q.trackingStableSeconds,
+                "captureDistanceM": q.captureDistanceM,
+                "meshVertexCount": q.meshVertexCount,
+                "angularVelocity": q.angularVelocityRadPerSec,
+            ])
+        }
         let viewModel = BoundaryDrawingViewModel(
             snapshot: snapshot,
             measurementEngine: dependencies.measurementEngine,
@@ -43,6 +68,7 @@ final class CaptureCoordinator: Coordinator {
             qualityScoreSnapshot: qualityScore
         )
         viewModel.onMeasurementComplete = { [weak self] scan in
+            CrashLogger.shared.log("Measurement complete — transitioning to Results", category: .coordinator)
             self?.showMeasurementResult(scan: scan)
         }
 
@@ -54,12 +80,25 @@ final class CaptureCoordinator: Coordinator {
     // MARK: - Step 3: Measurement Results + PUSH Input
 
     private func showMeasurementResult(scan: WoundScan) {
+        CrashLogger.shared.log("Navigating to Measurement Results screen", category: .coordinator)
+        CrashLogger.shared.logDiagnostics("Measurement Results", category: .measurement, data: [
+            "areaCm2": scan.primaryMeasurement.areaCm2,
+            "lengthMm": scan.primaryMeasurement.lengthMm,
+            "widthMm": scan.primaryMeasurement.widthMm,
+            "maxDepthMm": scan.primaryMeasurement.maxDepthMm,
+            "meanDepthMm": scan.primaryMeasurement.meanDepthMm,
+            "volumeMl": scan.primaryMeasurement.volumeMl,
+            "perimeterMm": scan.primaryMeasurement.perimeterMm,
+            "processingTimeMs": scan.primaryMeasurement.processingTimeMs,
+            "pushScore": scan.pushScore.totalScore,
+        ])
         let viewModel = MeasurementResultViewModel(
             scan: scan,
             storage: dependencies.localStorage,
             uploadManager: dependencies.uploadManager
         )
         viewModel.onSaveComplete = { [weak self] in
+            CrashLogger.shared.log("Save complete — returning to Capture", category: .coordinator)
             self?.showCapture() // Return to capture for next wound
         }
 

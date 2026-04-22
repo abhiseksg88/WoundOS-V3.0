@@ -1,6 +1,9 @@
 import Foundation
+import os
 import simd
 import WoundCore
+
+private let logger = Logger(subsystem: "com.woundos.app", category: "Measurement")
 
 // MARK: - Mesh Measurement Engine
 
@@ -27,11 +30,13 @@ public final class MeshMeasurementEngine {
         qualityScore: CaptureQualityScore? = nil
     ) throws -> WoundMeasurement {
 
+        logger.info("measure() called — unpacking vertices/faces")
         let vertices = captureData.unpackVertices()
         let faces = captureData.unpackFaces()
-        let normals = captureData.unpackNormals()
+        logger.info("Unpacked \(vertices.count) vertices, \(faces.count) faces")
 
         guard !vertices.isEmpty else {
+            logger.error("No vertices after unpacking — aborting")
             throw MeasurementError.noMeshIntersection
         }
 
@@ -39,7 +44,6 @@ public final class MeshMeasurementEngine {
             boundary: boundary,
             vertices: vertices,
             faces: faces,
-            normals: normals,
             cameraIntrinsics: captureData.intrinsicsMatrix,
             cameraTransform: captureData.transformMatrix,
             imageWidth: captureData.imageWidth,
@@ -56,7 +60,6 @@ public final class MeshMeasurementEngine {
         boundary: WoundBoundary,
         vertices: [SIMD3<Float>],
         faces: [SIMD3<UInt32>],
-        normals: [SIMD3<Float>],
         cameraIntrinsics: simd_float3x3,
         cameraTransform: simd_float4x4,
         imageWidth: Int,
@@ -65,8 +68,10 @@ public final class MeshMeasurementEngine {
     ) throws -> WoundMeasurement {
 
         let startTime = CFAbsoluteTimeGetCurrent()
+        logger.info("computeMeasurements: boundary2D=\(boundary.points2D.count), boundary3D=\(boundary.projectedPoints3D?.count ?? 0)")
 
         guard let points3D = boundary.projectedPoints3D, points3D.count >= 3 else {
+            logger.error("Insufficient 3D boundary points: \(boundary.projectedPoints3D?.count ?? 0)")
             throw MeasurementError.insufficientBoundaryPoints(
                 count: boundary.projectedPoints3D?.count ?? 0,
                 minimum: 3
@@ -74,6 +79,7 @@ public final class MeshMeasurementEngine {
         }
 
         guard boundary.points2D.count >= 3 else {
+            logger.error("Insufficient 2D boundary points: \(boundary.points2D.count)")
             throw MeasurementError.insufficientBoundaryPoints(
                 count: boundary.points2D.count,
                 minimum: 3
@@ -81,6 +87,7 @@ public final class MeshMeasurementEngine {
         }
 
         // Step 1: Rigorous mesh clipping via Sutherland-Hodgman + camera projection
+        logger.info("Step 1: MeshClipper.clip — vertices=\(vertices.count) faces=\(faces.count)")
         let clippedMesh = MeshClipper.clip(
             vertices: vertices,
             faces: faces,
@@ -92,11 +99,14 @@ public final class MeshMeasurementEngine {
         )
 
         guard !clippedMesh.isEmpty else {
+            logger.error("MeshClipper returned empty — no intersection with boundary")
             throw MeasurementError.noMeshIntersection
         }
+        logger.info("Clipped mesh: \(clippedMesh.vertices.count) vertices, \(clippedMesh.faces.count) faces")
 
         // Step 2: Area from clipped triangles
         let areaCm2 = AreaCalculator.computeArea(clippedMesh: clippedMesh)
+        logger.info("Step 2: Area = \(areaCm2) cm²")
 
         // Step 3: Depth — pass the REAL camera position so plane normal orients
         //          outward (toward camera).  This is the critical bug fix.
@@ -141,6 +151,7 @@ public final class MeshMeasurementEngine {
 
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
         let processingTimeMs = Int(elapsed * 1000)
+        logger.info("Pipeline complete in \(processingTimeMs)ms — area=\(areaCm2)cm² len=\(dimensions.lengthMm)mm w=\(dimensions.widthMm)mm depth=\(maxDepthMm)mm vol=\(volumeMl)mL perim=\(perimeterMm)mm")
 
         // Build the quality score with mesh hit rate + vertex count from this run
         let finalQuality = qualityScore.map { partial in

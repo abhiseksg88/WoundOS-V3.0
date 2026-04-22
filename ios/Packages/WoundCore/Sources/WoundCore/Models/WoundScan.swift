@@ -110,4 +110,6 @@ public enum UploadStatus: String, Codable, Sendable {
     case processed
     /// Upload failed, will retry
     case failed
+    /// Upload succeeded but backend processing timed out (scan is safe on server)
+    case processingTimeout
 }

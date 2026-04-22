@@ -1,6 +1,9 @@
 import ARKit
 import Combine
+import os
 import WoundCore
+
+private let logger = Logger(subsystem: "com.woundos.app", category: "Capture")
 
 // MARK: - AR Session Manager
 
@@ -11,7 +14,9 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
 
     // MARK: - Properties
 
+    #if !targetEnvironment(simulator)
     public let session = ARSession()
+    #endif
     private let configuration: CaptureSessionConfiguration
     private var currentFrame: ARFrame?
     private var meshAnchors: [ARMeshAnchor] = []
@@ -30,7 +35,11 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
     // MARK: - CaptureProviderProtocol
 
     public var isLiDARAvailable: Bool {
-        ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
+        #endif
     }
 
     public var isSessionActive: Bool {
@@ -46,16 +55,21 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
         self.configuration = configuration
         self.qualityMonitor = qualityMonitor
         super.init()
+        #if !targetEnvironment(simulator)
         session.delegate = self
+        #endif
     }
 
     // MARK: - Session Lifecycle
 
     public func startSession() throws {
+        logger.info("startSession() — LiDAR available: \(self.isLiDARAvailable)")
         guard isLiDARAvailable else {
+            logger.error("LiDAR not available on this device")
             throw CaptureError.lidarNotAvailable
         }
 
+        #if !targetEnvironment(simulator)
         let config = ARWorldTrackingConfiguration()
         config.sceneReconstruction = .mesh
         config.frameSemantics = [.smoothedSceneDepth]
@@ -68,12 +82,17 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
             config.videoFormat = hiResFormat
         }
 
+        logger.info("AR config: sceneReconstruction=mesh, frameSemantics=smoothedSceneDepth")
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
+        logger.info("ARSession.run() called successfully")
+        #endif
         qualityMonitor.reset()
     }
 
     public func pauseSession() {
+        #if !targetEnvironment(simulator)
         session.pause()
+        #endif
         qualityMonitor.reset()
     }
 
@@ -82,29 +101,42 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
     /// Freeze the current ARKit state and return a snapshot.
     /// All spatial data — RGB, depth, mesh, camera — is locked together.
     public func captureSnapshot() throws -> CaptureSnapshot {
+        #if targetEnvironment(simulator)
+        throw CaptureError.lidarNotAvailable
+        #else
+        logger.info("captureSnapshot() — freezing ARKit frame")
         guard let frame = currentFrame else {
+            logger.error("No current AR frame available")
             throw CaptureError.noFrameAvailable
         }
 
         guard let sceneDepth = frame.smoothedSceneDepth else {
+            logger.error("No smoothedSceneDepth in current frame")
             throw CaptureError.noDepthData
         }
 
         // 1. Extract RGB image
+        logger.info("Extracting RGB data from pixel buffer")
         let rgbData = extractRGBData(from: frame)
         let imageWidth = CVPixelBufferGetWidth(frame.capturedImage)
         let imageHeight = CVPixelBufferGetHeight(frame.capturedImage)
+        logger.info("RGB: \(imageWidth)x\(imageHeight), JPEG size=\(rgbData.count) bytes")
 
         // 2. Extract depth map
         let (depthValues, depthW, depthH) = extractDepthMap(from: sceneDepth.depthMap)
+        logger.info("Depth map: \(depthW)x\(depthH), \(depthValues.count) values")
 
         // 3. Extract confidence map
         let confidenceValues = extractConfidenceMap(from: sceneDepth.confidenceMap)
+        logger.info("Confidence map: \(confidenceValues.count) values")
 
         // 4. Reconstruct consolidated mesh from all mesh anchors
+        logger.info("Reconstructing mesh from \(self.meshAnchors.count) anchors")
         let (vertices, faces, normals) = reconstructMesh()
+        logger.info("Mesh: \(vertices.count) vertices, \(faces.count) faces, \(normals.count) normals")
 
         guard !vertices.isEmpty else {
+            logger.error("Mesh reconstruction produced 0 vertices")
             throw CaptureError.noMeshData
         }
 
@@ -128,6 +160,7 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
             deviceModel: deviceModelString(),
             timestamp: Date()
         )
+        #endif
     }
 
     // MARK: - RGB Extraction
@@ -301,6 +334,7 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
     }
 }
 
+#if !targetEnvironment(simulator)
 // MARK: - ARSessionDelegate
 
 extension ARSessionManager: ARSessionDelegate {
@@ -367,6 +401,7 @@ extension ARSessionManager: ARSessionDelegate {
         onTrackingStateChanged?(state)
     }
 }
+#endif
 
 // MARK: - Capture Errors
 

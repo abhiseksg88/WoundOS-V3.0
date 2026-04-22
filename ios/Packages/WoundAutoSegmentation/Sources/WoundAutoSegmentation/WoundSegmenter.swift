@@ -34,6 +34,8 @@ public enum SegmentationError: Error, LocalizedError {
     case maskGenerationFailed
     case contourExtractionFailed
     case invalidInputImage
+    case modelLoadFailed
+    case predictionFailed
 
     public var errorDescription: String? {
         switch self {
@@ -49,6 +51,10 @@ public enum SegmentationError: Error, LocalizedError {
             return "Unable to trace the object outline."
         case .invalidInputImage:
             return "The captured image is invalid."
+        case .modelLoadFailed:
+            return "Unable to load the wound segmentation model."
+        case .predictionFailed:
+            return "Wound segmentation model prediction failed."
         }
     }
 }

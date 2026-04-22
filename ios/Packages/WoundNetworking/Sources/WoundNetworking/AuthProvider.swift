@@ -1,45 +1,150 @@
 import Foundation
 
+// MARK: - Firebase Auth Protocol
+
+/// Abstraction over Firebase Auth for dependency injection.
+/// In production, the conforming type calls `Auth.auth().currentUser?.getIDToken()`.
+/// For staging / tests, a stub returns a placeholder token.
+public protocol FirebaseAuthProviding: Sendable {
+    func getFirebaseIDToken() async throws -> String
+}
+
+/// Stub that returns a fixed token string.
+/// Use in staging (backend short-circuits Firebase verification when ENVIRONMENT=development).
+public struct StubFirebaseAuth: FirebaseAuthProviding {
+    private let token: String
+
+    public init(token: String = "stub-firebase-id-token") {
+        self.token = token
+    }
+
+    public func getFirebaseIDToken() async throws -> String {
+        token
+    }
+}
+
 // MARK: - Auth Provider
 
-/// Manages authentication tokens for API requests.
-/// Wraps Firebase Auth and provides bearer tokens.
-public final class AuthProvider {
+/// Manages API bearer tokens: stores in Keychain, exchanges Firebase ID tokens,
+/// and refreshes on 401.
+///
+/// Concurrent refresh requests are coalesced — if multiple callers hit
+/// `refreshToken()` at the same time, only one Firebase→backend exchange
+/// runs; the others await the same result.
+public final class AuthProvider: @unchecked Sendable {
 
-    public static let shared = AuthProvider()
+    private let tokenStore: TokenStoreProtocol
+    private let firebase: FirebaseAuthProviding
+    private let session: URLSession
 
+    /// In-memory cache to avoid Keychain reads on every request.
+    private let lock = NSLock()
     private var cachedToken: String?
     private var tokenExpiry: Date?
 
-    private init() {}
+    /// In-flight refresh task. Guarded by `lock` so concurrent callers
+    /// share a single exchange round-trip instead of firing duplicates.
+    private var activeRefreshTask: Task<String, Error>?
 
-    /// Get a valid bearer token for API requests.
-    /// Refreshes automatically if expired.
+    public init(
+        tokenStore: TokenStoreProtocol,
+        firebase: FirebaseAuthProviding,
+        session: URLSession = .shared
+    ) {
+        self.tokenStore = tokenStore
+        self.firebase = firebase
+        self.session = session
+        self.cachedToken = tokenStore.loadToken()
+    }
+
+    /// Returns a valid bearer token, refreshing if needed.
     public func getToken() async throws -> String {
-        if let token = cachedToken, let expiry = tokenExpiry, Date() < expiry {
+        lock.lock()
+        let cached = cachedToken
+        let expiry = tokenExpiry
+        lock.unlock()
+
+        if let token = cached, let exp = expiry, Date() < exp {
             return token
         }
+        // Refresh via Firebase → backend exchange
         return try await refreshToken()
     }
 
-    /// Set the token directly (e.g., from Firebase Auth callback)
-    public func setToken(_ token: String, expiresIn seconds: TimeInterval) {
-        cachedToken = token
-        tokenExpiry = Date().addingTimeInterval(seconds - 60) // Refresh 60s before expiry
+    /// Force a token refresh: get a new Firebase ID token, exchange it for an API JWT.
+    /// Concurrent calls are coalesced into a single exchange request.
+    @discardableResult
+    public func refreshToken() async throws -> String {
+        lock.lock()
+        if let existing = activeRefreshTask {
+            lock.unlock()
+            return try await existing.value
+        }
+
+        let task = Task<String, Error> { [weak self] in
+            guard let self else { throw APIError.transport(URLError(.cancelled)) }
+            let firebaseToken = try await self.firebase.getFirebaseIDToken()
+            let response = try await self.exchangeFirebaseToken(firebaseToken)
+            self.cacheToken(response.token, expiresIn: TimeInterval(response.expiresIn))
+            self.lock.lock()
+            self.activeRefreshTask = nil
+            self.lock.unlock()
+            return response.token
+        }
+        activeRefreshTask = task
+        lock.unlock()
+
+        do {
+            return try await task.value
+        } catch {
+            lock.lock()
+            activeRefreshTask = nil
+            lock.unlock()
+            throw error
+        }
     }
 
-    /// Clear cached token on logout
+    /// Clear all token state (logout).
     public func clearToken() {
+        lock.lock()
         cachedToken = nil
         tokenExpiry = nil
+        lock.unlock()
+        tokenStore.deleteToken()
     }
 
-    private func refreshToken() async throws -> String {
-        // In production this would call Firebase Auth to get a fresh ID token.
-        // For now, return the cached token or throw.
-        guard let token = cachedToken else {
-            throw NetworkError.unauthorized
+    // MARK: - Token Exchange
+
+    /// POST /v1/auth/token — exchange a Firebase ID token for an API JWT.
+    private func exchangeFirebaseToken(_ idToken: String) async throws -> TokenResponse {
+        var request = URLRequest(url: Endpoints.authToken)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder.woundOS.encode(TokenRequest(firebaseToken: idToken))
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(URLError(.badServerResponse))
         }
-        return token
+        guard http.statusCode == 200 else {
+            if http.statusCode == 401 {
+                throw APIError.unauthorized
+            }
+            let detail = (try? JSONDecoder.woundOS.decode(BackendErrorResponse.self, from: data))?.detail
+            throw APIError.server(http.statusCode, detail ?? "Token exchange failed")
+        }
+
+        return try JSONDecoder.woundOS.decode(TokenResponse.self, from: data)
+    }
+
+    // MARK: - Cache
+
+    private func cacheToken(_ token: String, expiresIn seconds: TimeInterval) {
+        lock.lock()
+        cachedToken = token
+        tokenExpiry = Date().addingTimeInterval(seconds - 60) // Refresh 60s early
+        lock.unlock()
+        try? tokenStore.save(token: token)
     }
 }

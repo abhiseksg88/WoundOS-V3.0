@@ -3,10 +3,13 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		242974312F96D496001E05D8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2442EF462F96D123001F449F /* Assets.xcassets */; };
+		242974332F97106A001E05D8 /* ImageViewGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242974322F97106A001E05D8 /* ImageViewGeometry.swift */; };
+		249403B82F972F9F000FB77F /* CrashLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249403B72F972F9F000FB77F /* CrashLogger.swift */; };
 		BBBB00000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000001 /* AppDelegate.swift */; };
 		BBBB00000000000000000002 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000002 /* DependencyContainer.swift */; };
 		BBBB00000000000000000003 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000003 /* SceneDelegate.swift */; };
@@ -36,6 +39,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		242974322F97106A001E05D8 /* ImageViewGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewGeometry.swift; sourceTree = "<group>"; };
+		2442EF462F96D123001F449F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		249403B72F972F9F000FB77F /* CrashLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashLogger.swift; sourceTree = "<group>"; };
 		AAAA00000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AAAA00000000000000000002 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
 		AAAA00000000000000000003 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
@@ -77,6 +83,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		249403B62F972F81000FB77F /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				249403B72F972F9F000FB77F /* CrashLogger.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
 		CCCC00000000000000000001 = {
 			isa = PBXGroup;
 			children = (
@@ -93,6 +107,7 @@
 				CCCC00000000000000000005 /* Scenes */,
 				CCCC00000000000000000011 /* Views */,
 				CCCC00000000000000000012 /* Resources */,
+				249403B62F972F81000FB77F /* Utilities */,
 			);
 			path = WoundOS;
 			sourceTree = "<group>";
@@ -135,6 +150,7 @@
 			children = (
 				AAAA00000000000000000008 /* BoundaryDrawingViewController.swift */,
 				AAAA00000000000000000009 /* BoundaryDrawingViewModel.swift */,
+				242974322F97106A001E05D8 /* ImageViewGeometry.swift */,
 			);
 			path = BoundaryDrawing;
 			sourceTree = "<group>";
@@ -189,6 +205,7 @@
 			isa = PBXGroup;
 			children = (
 				AAAA00000000000000000021 /* Info.plist */,
+				2442EF462F96D123001F449F /* Assets.xcassets */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -275,6 +292,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				242974312F96D496001E05D8 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -289,6 +307,7 @@
 				BBBB00000000000000000002 /* DependencyContainer.swift in Sources */,
 				BBBB00000000000000000003 /* SceneDelegate.swift in Sources */,
 				BBBB00000000000000000004 /* AppCoordinator.swift in Sources */,
+				242974332F97106A001E05D8 /* ImageViewGeometry.swift in Sources */,
 				BBBB00000000000000000005 /* CaptureCoordinator.swift in Sources */,
 				BBBB00000000000000000006 /* Coordinator.swift in Sources */,
 				BBBB00000000000000000007 /* ScanListCoordinator.swift in Sources */,
@@ -303,6 +322,7 @@
 				BBBB00000000000000000016 /* ScanCell.swift in Sources */,
 				BBBB00000000000000000017 /* ScanListViewController.swift in Sources */,
 				BBBB00000000000000000018 /* ScanListViewModel.swift in Sources */,
+				249403B82F972F9F000FB77F /* CrashLogger.swift in Sources */,
 				BBBB00000000000000000019 /* HealthStyleComponents.swift in Sources */,
 				BBBB00000000000000000020 /* WoundImageOverlayView.swift in Sources */,
 			);
@@ -314,9 +334,11 @@
 		111100000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 14;
+				DEVELOPMENT_TEAM = 829CPR87G4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -336,9 +358,11 @@
 		111100000000000000000002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 14;
+				DEVELOPMENT_TEAM = 829CPR87G4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -359,6 +383,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -422,6 +447,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;

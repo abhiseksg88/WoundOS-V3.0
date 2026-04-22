@@ -49,7 +49,7 @@ final class BoundaryDrawingViewController: UIViewController {
     }()
 
     private lazy var modeToggle: UISegmentedControl = {
-        let control = UISegmentedControl(items: ["Auto", "Polygon", "Freeform"])
+        let control = UISegmentedControl(items: ["Auto Detect", "Draw Manually"])
         control.translatesAutoresizingMaskIntoConstraints = false
         control.selectedSegmentIndex = 0
         control.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
@@ -57,7 +57,7 @@ final class BoundaryDrawingViewController: UIViewController {
     }()
 
     /// Status label shown inside `processingOverlay`. Text is swapped between
-    /// "Detecting outline…" (auto-segmentation) and "Computing measurements…"
+    /// "Detecting wound boundary…" (auto-segmentation) and "Computing measurements…"
     /// (mesh pipeline) depending on which operation is in flight.
     private lazy var processingLabel: UILabel = {
         let label = UILabel()
@@ -66,6 +66,19 @@ final class BoundaryDrawingViewController: UIViewController {
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
+    }()
+
+    /// Pulsing ring shown at tap point during auto-segmentation.
+    private lazy var pulsingRingView: UIView = {
+        let ring = UIView()
+        ring.translatesAutoresizingMaskIntoConstraints = false
+        ring.isHidden = true
+        ring.isUserInteractionEnabled = false
+        ring.layer.borderColor = WOColors.primaryGreen.cgColor
+        ring.layer.borderWidth = 3
+        ring.layer.cornerRadius = 30
+        ring.frame.size = CGSize(width: 60, height: 60)
+        return ring
     }()
 
     private lazy var bottomBar: UIVisualEffectView = {
@@ -97,6 +110,22 @@ final class BoundaryDrawingViewController: UIViewController {
         return button
     }()
 
+    /// Yellow banner for non-blocking validation warnings (Bug 7).
+    private lazy var warningBanner: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = WOFonts.footnote
+        label.textColor = .black
+        label.textAlignment = .center
+        label.backgroundColor = WOColors.warningOrange.withAlphaComponent(0.9)
+        label.numberOfLines = 0
+        label.isHidden = true
+        label.layer.cornerRadius = 8
+        label.clipsToBounds = true
+        return label
+    }()
+
+    /// Red banner for real errors — segmentation / measurement failures (Bug 6).
     private lazy var errorBanner: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -108,8 +137,14 @@ final class BoundaryDrawingViewController: UIViewController {
         label.isHidden = true
         label.layer.cornerRadius = 8
         label.clipsToBounds = true
+        label.isUserInteractionEnabled = true
         return label
     }()
+
+    private var errorDismissTimer: Timer?
+
+    /// Cached geometry recomputed every layout pass (Bug 4).
+    private var currentGeometry = ImageViewGeometry(sensorSize: .zero, displayedSize: .zero, viewSize: .zero)
 
     private lazy var activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
@@ -162,10 +197,34 @@ final class BoundaryDrawingViewController: UIViewController {
         if !viewModel.autoSegmenterAvailable {
             modeToggle.setEnabled(false, forSegmentAt: 0)
             modeToggle.selectedSegmentIndex = 1
-            viewModel.drawingMode = .polygon
+            viewModel.drawingMode = .freeform
         } else {
             modeToggle.selectedSegmentIndex = 0
         }
+
+        // Dismiss error banner on tap
+        errorBanner.addGestureRecognizer(
+            UITapGestureRecognizer(target: self, action: #selector(dismissErrorBanner))
+        )
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Recompute geometry every layout pass so coordinate conversion
+        // always uses the current view/image relationship (Bug 4).
+        //
+        // sensorSize = raw landscape buffer dimensions (for BoundaryProjector).
+        // displayedSize = UIImage.size with .right orientation (portrait).
+        let sensorSize = CGSize(
+            width: viewModel.snapshot.imageWidth,
+            height: viewModel.snapshot.imageHeight
+        )
+        let displayedSize = viewModel.capturedImage?.size ?? sensorSize
+        currentGeometry = ImageViewGeometry(
+            sensorSize: sensorSize,
+            displayedSize: displayedSize,
+            viewSize: canvasView.bounds.size
+        )
     }
 
     // MARK: - UI Setup
@@ -175,8 +234,10 @@ final class BoundaryDrawingViewController: UIViewController {
 
         view.addSubview(imageView)
         view.addSubview(canvasView)
+        view.addSubview(pulsingRingView)
         view.addSubview(instructionCard)
         view.addSubview(bottomBar)
+        view.addSubview(warningBanner)
         view.addSubview(errorBanner)
         view.addSubview(processingOverlay)
 
@@ -213,8 +274,13 @@ final class BoundaryDrawingViewController: UIViewController {
             instructionLabel.trailingAnchor.constraint(equalTo: instructionCard.contentView.trailingAnchor, constant: -WOSpacing.lg),
             instructionLabel.centerYAnchor.constraint(equalTo: instructionCard.contentView.centerYAnchor),
 
-            // Error banner
-            errorBanner.bottomAnchor.constraint(equalTo: bottomBar.topAnchor, constant: -WOSpacing.sm),
+            // Warning banner (yellow, non-blocking validation)
+            warningBanner.bottomAnchor.constraint(equalTo: bottomBar.topAnchor, constant: -WOSpacing.sm),
+            warningBanner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: WOSpacing.lg),
+            warningBanner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -WOSpacing.lg),
+
+            // Error banner (red, real errors)
+            errorBanner.bottomAnchor.constraint(equalTo: warningBanner.topAnchor, constant: -WOSpacing.xs),
             errorBanner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: WOSpacing.lg),
             errorBanner.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -WOSpacing.lg),
 
@@ -259,14 +325,36 @@ final class BoundaryDrawingViewController: UIViewController {
             }
             .store(in: &cancellables)
 
+        // Validation warnings → yellow banner (non-blocking, Bug 7)
         viewModel.$validationErrors
             .receive(on: DispatchQueue.main)
             .sink { [weak self] errors in
                 if errors.isEmpty {
-                    self?.errorBanner.isHidden = true
+                    self?.warningBanner.isHidden = true
                 } else {
-                    self?.errorBanner.isHidden = false
-                    self?.errorBanner.text = "  " + errors.map(\.localizedDescription).joined(separator: ". ") + "  "
+                    self?.warningBanner.isHidden = false
+                    self?.warningBanner.text = "  " + errors.map(\.localizedDescription).joined(separator: ". ") + "  "
+                }
+            }
+            .store(in: &cancellables)
+
+        // Real errors → red banner with auto-dismiss + haptic (Bug 6)
+        viewModel.$error
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] errorMessage in
+                guard let self else { return }
+                self.errorDismissTimer?.invalidate()
+                if let message = errorMessage, !message.isEmpty {
+                    self.errorBanner.isHidden = false
+                    self.errorBanner.text = "  \(message). Try Polygon or Freeform.  "
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    self.errorDismissTimer = Timer.scheduledTimer(
+                        withTimeInterval: 6.0, repeats: false
+                    ) { [weak self] _ in
+                        self?.dismissErrorBanner()
+                    }
+                } else {
+                    self.errorBanner.isHidden = true
                 }
             }
             .store(in: &cancellables)
@@ -301,14 +389,16 @@ final class BoundaryDrawingViewController: UIViewController {
             .sink { [weak self] running in
                 guard let self else { return }
                 if running {
-                    self.processingLabel.text = "Detecting outline…"
+                    self.processingLabel.text = "Detecting wound boundary…"
                     self.processingOverlay.isHidden = false
                     self.activityIndicator.startAnimating()
                     self.canvasView.isUserInteractionEnabled = false
+                    self.showPulsingRing()
                 } else if !self.viewModel.isComputing {
                     self.processingOverlay.isHidden = true
                     self.activityIndicator.stopAnimating()
                     self.canvasView.isUserInteractionEnabled = true
+                    self.hidePulsingRing()
                 }
             }
             .store(in: &cancellables)
@@ -317,11 +407,31 @@ final class BoundaryDrawingViewController: UIViewController {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] polygon in
                 guard let self else { return }
-                self.canvasView.setBoundary(points: polygon)
-                // Canvas is now in .polygon mode; reflect in segmented control
-                // so the nurse understands they can edit vertices.
+                // 1. Show the detected boundary on the canvas WITHOUT triggering
+                //    the delegate → didFinalizeBoundary → O(n²) validate chain.
+                //    autoFinalizeBoundary handles finalization with relaxed validation.
+                self.canvasView.setBoundary(points: polygon, notifyDelegate: false)
+                // Switch to manual edit mode so nurse can adjust the detected boundary
                 self.modeToggle.selectedSegmentIndex = 1
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+                // Show which model was used (helpful for debugging/user awareness)
+                if let modelId = self.viewModel.lastSegmenterModelId {
+                    let isServer = modelId.contains("sam2") || modelId.contains("server")
+                    self.instructionLabel.text = isServer
+                        ? "Boundary detected (AI) — adjust if needed"
+                        : "Boundary detected (on-device) — adjust if needed"
+                }
+
+                // 2. Auto-finalize with relaxed validation (machine-generated contour)
+                self.viewModel.autoFinalizeBoundary(polygon, in: self.currentGeometry)
+
+                // 3. Brief pause so the nurse sees the detection, then auto-measure
+                guard self.viewModel.boundaryFinalized else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) { [weak self] in
+                    guard let self, self.viewModel.boundaryFinalized else { return }
+                    self.viewModel.computeMeasurementsWithDefaults()
+                }
             }
             .store(in: &cancellables)
     }
@@ -329,16 +439,22 @@ final class BoundaryDrawingViewController: UIViewController {
     // MARK: - Actions
 
     @objc private func modeChanged() {
+        let mode: DrawingMode
         switch modeToggle.selectedSegmentIndex {
-        case 0: viewModel.drawingMode = .auto
-        case 1: viewModel.drawingMode = .polygon
-        case 2: viewModel.drawingMode = .freeform
-        default: break
+        case 0: mode = .auto
+        case 1: mode = .freeform
+        default: return
         }
+        // Set mode on both VM and canvas SYNCHRONOUSLY to eliminate the
+        // race between the Combine binding (async) and the next touch event.
+        viewModel.drawingMode = mode
+        canvasView.drawingMode = mode
         // Switching modes should clear any in-progress sketch so the nurse
         // doesn't end up with a half-freeform, half-polygon boundary.
+        // Use clearBoundaryKeepingMode so the mode set above is not
+        // overridden back to .tapPoint (Bug 1 fix).
         canvasView.clearAll()
-        viewModel.clearBoundary()
+        viewModel.clearBoundaryKeepingMode()
     }
 
     @objc private func undoTapped() {
@@ -350,9 +466,43 @@ final class BoundaryDrawingViewController: UIViewController {
         viewModel.clearBoundary()
     }
 
+    @objc private func dismissErrorBanner() {
+        errorDismissTimer?.invalidate()
+        errorBanner.isHidden = true
+        viewModel.error = nil
+    }
+
     @objc private func confirmTapped() {
         guard viewModel.boundaryFinalized else { return }
         showPUSHInputSheet()
+    }
+
+    // MARK: - Pulsing Ring Animation
+
+    private func showPulsingRing() {
+        guard let tapPoint = viewModel.tapPoint else { return }
+        pulsingRingView.center = tapPoint
+        pulsingRingView.bounds = CGRect(x: 0, y: 0, width: 60, height: 60)
+        pulsingRingView.layer.cornerRadius = 30
+        pulsingRingView.alpha = 1
+        pulsingRingView.isHidden = false
+        pulsingRingView.transform = .identity
+
+        UIView.animate(
+            withDuration: 1.0,
+            delay: 0,
+            options: [.repeat, .autoreverse, .curveEaseInOut]
+        ) {
+            self.pulsingRingView.transform = CGAffineTransform(scaleX: 1.5, y: 1.5)
+            self.pulsingRingView.alpha = 0.3
+        }
+    }
+
+    private func hidePulsingRing() {
+        pulsingRingView.layer.removeAllAnimations()
+        pulsingRingView.isHidden = true
+        pulsingRingView.transform = .identity
+        pulsingRingView.alpha = 1
     }
 
     // MARK: - PUSH Input Sheet
@@ -385,16 +535,16 @@ extension BoundaryDrawingViewController: BoundaryCanvasDelegate {
 
     func canvasDidPlaceTapPoint(_ point: CGPoint) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        viewModel.didPlaceTapPoint(point, in: canvasView.bounds.size)
+        viewModel.didPlaceTapPoint(point, in: currentGeometry)
     }
 
     func canvasDidUpdateBoundary(_ points: [CGPoint]) {
-        viewModel.didUpdateBoundary(points, in: canvasView.bounds.size)
+        viewModel.didUpdateBoundary(points, in: currentGeometry)
     }
 
     func canvasDidFinalizeBoundary(_ points: [CGPoint]) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        viewModel.didFinalizeBoundary(points, in: canvasView.bounds.size)
+        viewModel.didFinalizeBoundary(points, in: currentGeometry)
     }
 
     func canvasDidClearBoundary() {

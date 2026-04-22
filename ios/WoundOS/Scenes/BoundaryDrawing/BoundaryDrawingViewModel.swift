@@ -43,11 +43,25 @@ final class BoundaryDrawingViewModel: ObservableObject {
     /// (even if the nurse then edited it). Stored with the scan so audit
     /// trails can distinguish AI-assisted from purely manual boundaries.
     private var boundaryWasAutoSeeded = false
-    private var segmenterModelId: String?
+    private(set) var segmenterModelId: String?
 
-    /// The captured RGB image for display
-    var capturedImage: UIImage? {
-        UIImage(data: snapshot.rgbImageData)
+    /// Exposes the model identifier of the last successful segmentation
+    /// so the VC can indicate which model detected the boundary.
+    var lastSegmenterModelId: String? { segmenterModelId }
+
+    /// The captured RGB image for display, cached to avoid repeated JPEG decoding.
+    /// ARKit's pixel buffer is always landscape-right. Apply `.right`
+    /// orientation so UIImageView displays it in portrait.
+    lazy var capturedImage: UIImage? = {
+        guard let raw = UIImage(data: snapshot.rgbImageData),
+              let cg = raw.cgImage else { return nil }
+        return UIImage(cgImage: cg, scale: 1.0, orientation: .right)
+    }()
+
+    /// Raw landscape CGImage for passing to the segmenter (no orientation
+    /// rotation — Vision needs the raw sensor pixels).
+    private var rawCGImage: CGImage? {
+        UIImage(data: snapshot.rgbImageData)?.cgImage
     }
 
     var instructionText: String {
@@ -55,13 +69,13 @@ final class BoundaryDrawingViewModel: ObservableObject {
         case .tapPoint:
             return "Tap the center of the wound"
         case .polygon:
-            return "Tap around the wound edge to place points. Tap near the first point to close."
+            return "Tap around the wound edge to place points"
         case .freeform:
             return "Trace your finger around the wound edge"
         case .auto:
             return autoSegmenterAvailable
-                ? "Tap the center of the object — outline will appear automatically"
-                : "Auto-detect requires iOS 17. Switch to Polygon or Freeform."
+                ? "Tap the center of the wound"
+                : "Auto-detect unavailable. Switch to Draw Manually."
         }
     }
 
@@ -91,18 +105,15 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
     // MARK: - Tap Point
 
-    func didPlaceTapPoint(_ point: CGPoint, in viewSize: CGSize) {
+    func didPlaceTapPoint(_ point: CGPoint, in geometry: ImageViewGeometry) {
         tapPoint = point
-        normalizedTapPoint = SIMD2<Float>(
-            Float(point.x / viewSize.width),
-            Float(point.y / viewSize.height)
-        )
+        normalizedTapPoint = geometry.viewToSensorNormalized(point)
 
         // In .auto mode, the tap is a point prompt for the segmenter. The VC
         // subscribes to `autoSegmentationResult` and seeds the canvas with
         // the resulting polygon. Otherwise, advance to polygon drawing mode.
         if drawingMode == .auto {
-            runAutoSegmentation(tapPoint: point, viewSize: viewSize)
+            runAutoSegmentation(tapPoint: point, geometry: geometry)
         } else {
             drawingMode = .polygon
         }
@@ -110,29 +121,29 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
     // MARK: - Auto Segmentation
 
-    func runAutoSegmentation(tapPoint: CGPoint, viewSize: CGSize) {
+    func runAutoSegmentation(tapPoint: CGPoint, geometry: ImageViewGeometry) {
+        CrashLogger.shared.log("Auto-segmentation requested at tap=\(tapPoint)", category: .segmentation)
         guard let segmenter else {
+            CrashLogger.shared.error("No segmenter available", category: .segmentation)
             error = "Auto-detect is not available on this device."
             return
         }
-        guard let image = capturedImage, let cgImage = image.cgImage else {
+        // Use the raw landscape CGImage — Vision needs sensor-oriented pixels.
+        guard let cgImage = rawCGImage else {
+            CrashLogger.shared.error("rawCGImage is nil — cannot segment", category: .segmentation)
             error = "Captured image is unavailable."
             return
         }
 
-        // Convert tap from view-local coords to image pixel coords. The
-        // image view uses .scaleAspectFit — same letterboxing logic the
-        // existing pipeline relies on — so we project through the fit rect.
-        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
-        let fitRect = aspectFitRect(imageSize: imageSize, in: viewSize)
-        guard fitRect.contains(tapPoint) else {
+        // Convert tap from view-local coords to sensor pixel coords,
+        // accounting for portrait display → landscape sensor rotation.
+        guard geometry.fittedRect.contains(tapPoint) else {
+            CrashLogger.shared.log("Tap outside image area: \(tapPoint) not in \(geometry.fittedRect)", category: .segmentation, level: .warning)
             error = "Tap inside the image area."
             return
         }
-        let imageTap = CGPoint(
-            x: (tapPoint.x - fitRect.minX) / fitRect.width * imageSize.width,
-            y: (tapPoint.y - fitRect.minY) / fitRect.height * imageSize.height
-        )
+        let sensorTap = geometry.viewToSensorPixel(tapPoint)
+        CrashLogger.shared.log("Sensor tap coords: \(sensorTap), image: \(cgImage.width)x\(cgImage.height)", category: .segmentation)
 
         isAutoSegmenting = true
         Task { @MainActor in
@@ -140,77 +151,113 @@ final class BoundaryDrawingViewModel: ObservableObject {
             do {
                 let result = try await segmenter.segment(
                     image: cgImage,
-                    tapPoint: imageTap
+                    tapPoint: sensorTap
                 )
-                // Project polygon back into view-local coords for the canvas.
-                let viewPolygon = result.polygonImageSpace.map { p in
-                    CGPoint(
-                        x: fitRect.minX + p.x / imageSize.width * fitRect.width,
-                        y: fitRect.minY + p.y / imageSize.height * fitRect.height
-                    )
+                CrashLogger.shared.log("Segmentation success: \(result.polygonImageSpace.count) polygon points, model=\(result.modelIdentifier)", category: .segmentation)
+
+                // Sanity check: reject polygons that cover > 40% of the image.
+                // A wound boundary should never be this large — it means the
+                // segmenter grabbed the entire foreground instead of the wound.
+                let polyArea = Self.polygonArea(result.polygonImageSpace)
+                let imageArea = result.imageSize.width * result.imageSize.height
+                let coverage = polyArea / imageArea
+                CrashLogger.shared.log("Polygon coverage: \(String(format: "%.1f%%", coverage * 100)) of image", category: .segmentation)
+
+                if coverage > 0.40 {
+                    CrashLogger.shared.log("Polygon rejected — covers \(String(format: "%.0f%%", coverage * 100)) of image", category: .segmentation, level: .warning)
+                    self.error = "Detection too large — tap directly on the wound, or use Draw Manually."
+                    return
+                }
+
+                // Project polygon from sensor pixels back to view-local coords.
+                let viewPolygon = result.polygonImageSpace.map { sensorPt in
+                    geometry.sensorPixelToViewPoint(sensorPt)
                 }
                 boundaryWasAutoSeeded = true
                 segmenterModelId = result.modelIdentifier
                 autoSegmentationResult.send(viewPolygon)
             } catch {
-                self.error = error.localizedDescription
+                CrashLogger.shared.error("Auto-segmentation failed", category: .segmentation, error: error)
+                self.error = "Segmentation failed: \(error.localizedDescription)"
             }
         }
     }
 
-    private func aspectFitRect(imageSize: CGSize, in viewSize: CGSize) -> CGRect {
-        guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
-        let scale = min(viewSize.width / imageSize.width, viewSize.height / imageSize.height)
-        let fittedSize = CGSize(
-            width: imageSize.width * scale,
-            height: imageSize.height * scale
-        )
-        let origin = CGPoint(
-            x: (viewSize.width - fittedSize.width) / 2,
-            y: (viewSize.height - fittedSize.height) / 2
-        )
-        return CGRect(origin: origin, size: fittedSize)
-    }
-
     // MARK: - Boundary Updates
 
-    func didUpdateBoundary(_ points: [CGPoint], in viewSize: CGSize) {
-        normalizedBoundaryPoints = points.map { p in
-            SIMD2<Float>(
-                Float(p.x / viewSize.width),
-                Float(p.y / viewSize.height)
-            )
+    func didUpdateBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
+        normalizedBoundaryPoints = points.map { geometry.viewToSensorNormalized($0) }
+        // Enable Measure as soon as polygon has 3+ points — the measurement
+        // pipeline auto-closes the polygon. This avoids requiring the user
+        // to tap near the first vertex to "close" the polygon.
+        if drawingMode == .polygon && normalizedBoundaryPoints.count >= 3 {
+            boundaryFinalized = true
         }
     }
 
-    func didFinalizeBoundary(_ points: [CGPoint], in viewSize: CGSize) {
-        normalizedBoundaryPoints = points.map { p in
-            SIMD2<Float>(
-                Float(p.x / viewSize.width),
-                Float(p.y / viewSize.height)
-            )
+    func didFinalizeBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
+        CrashLogger.shared.log("didFinalizeBoundary: \(points.count) view-space points, geometry.fittedRect=\(geometry.fittedRect)", category: .boundary)
+        normalizedBoundaryPoints = points.map { geometry.viewToSensorNormalized($0) }
+        CrashLogger.shared.log("didFinalizeBoundary: normalized \(normalizedBoundaryPoints.count) points", category: .boundary)
+
+        // Enable Measure as soon as we have a valid polygon (Bug 3).
+        // Validation is non-blocking — shown as warnings only.
+        if normalizedBoundaryPoints.count >= 3 {
+            CrashLogger.shared.log("didFinalizeBoundary: setting boundaryFinalized=true", category: .boundary)
+            boundaryFinalized = true
+            CrashLogger.shared.log("didFinalizeBoundary: boundaryFinalized set OK", category: .boundary)
+        } else {
+            CrashLogger.shared.log("didFinalizeBoundary: too few points: \(normalizedBoundaryPoints.count)", category: .boundary, level: .warning)
         }
 
-        // Validate
+        CrashLogger.shared.log("didFinalizeBoundary: calling BoundaryValidator.validate()", category: .boundary)
         let result = BoundaryValidator.validate(points: normalizedBoundaryPoints)
-        if !result.isValid {
-            validationErrors = result.errors
+        CrashLogger.shared.log("didFinalizeBoundary: validate returned isValid=\(result.isValid) errors=\(result.errors.count)", category: .boundary)
+        validationErrors = result.errors
+        CrashLogger.shared.log("didFinalizeBoundary: validationErrors set OK", category: .boundary)
+        if !result.errors.isEmpty {
+            CrashLogger.shared.log("Boundary validation warnings: \(result.errors.map(\.localizedDescription))", category: .boundary, level: .warning)
+        }
+        CrashLogger.shared.log("didFinalizeBoundary: COMPLETE", category: .boundary)
+    }
+
+    /// Auto-finalize an auto-segmented boundary with relaxed validation.
+    /// Vision's contour detector produces valid closed polygons, so we
+    /// skip strict self-intersection and area checks that can false-positive
+    /// on machine-generated contours.
+    func autoFinalizeBoundary(_ points: [CGPoint], in geometry: ImageViewGeometry) {
+        CrashLogger.shared.log("autoFinalizeBoundary: \(points.count) points", category: .boundary)
+        normalizedBoundaryPoints = points.map { geometry.viewToSensorNormalized($0) }
+
+        guard normalizedBoundaryPoints.count >= 3 else {
+            CrashLogger.shared.log("autoFinalizeBoundary: too few points \(normalizedBoundaryPoints.count)", category: .boundary, level: .warning)
+            validationErrors = [.tooFewPoints(count: normalizedBoundaryPoints.count)]
             return
         }
 
         validationErrors = []
         boundaryFinalized = true
+        CrashLogger.shared.log("autoFinalizeBoundary: COMPLETE — boundaryFinalized=true", category: .boundary)
     }
 
-    func clearBoundary() {
+    /// Clears boundary state without changing drawingMode.
+    /// Called by the VC when switching modes — the mode is owned by the
+    /// segmented control, not by the clear action. (Bug 1 fix)
+    func clearBoundaryKeepingMode() {
         normalizedBoundaryPoints = []
         boundaryFinalized = false
         validationErrors = []
-        drawingMode = .tapPoint
         normalizedTapPoint = nil
         tapPoint = nil
         boundaryWasAutoSeeded = false
         segmenterModelId = nil
+        error = nil
+    }
+
+    /// Full clear for the explicit "Clear" button. Does not hardcode
+    /// a specific mode — the VC's segmented control owns mode selection.
+    func clearBoundary() {
+        clearBoundaryKeepingMode()
     }
 
     // MARK: - Compute Measurements
@@ -224,15 +271,32 @@ final class BoundaryDrawingViewModel: ObservableObject {
         exudateAmount: ExudateAmount,
         tissueType: TissueType
     ) {
-        guard boundaryFinalized else { return }
+        guard boundaryFinalized else {
+            CrashLogger.shared.log("computeMeasurements called but boundary not finalized", category: .measurement, level: .warning)
+            return
+        }
+        CrashLogger.shared.log("Starting measurement pipeline — \(normalizedBoundaryPoints.count) boundary points", category: .measurement)
         isComputing = true
 
         Task { @MainActor in
             do {
                 // 1. Build CaptureData from snapshot
+                CrashLogger.shared.log("Step 1: Building CaptureData from snapshot", category: .measurement)
                 let captureData = buildCaptureData()
+                CrashLogger.shared.logDiagnostics("CaptureData", category: .measurement, data: [
+                    "vertexCount": captureData.vertexCount,
+                    "faceCount": captureData.faceCount,
+                    "imageWidth": captureData.imageWidth,
+                    "imageHeight": captureData.imageHeight,
+                    "depthWidth": captureData.depthWidth,
+                    "depthHeight": captureData.depthHeight,
+                    "meshVerticesDataSize": captureData.meshVerticesData.count,
+                    "meshFacesDataSize": captureData.meshFacesData.count,
+                    "depthMapDataSize": captureData.depthMapData.count,
+                ])
 
                 // 2. Project 2D boundary onto 3D mesh (with confidence filtering)
+                CrashLogger.shared.log("Step 2: Projecting 2D boundary → 3D mesh", category: .boundary)
                 let projection = try BoundaryProjector.project(
                     points2D: normalizedBoundaryPoints,
                     imageWidth: snapshot.imageWidth,
@@ -246,12 +310,18 @@ final class BoundaryDrawingViewModel: ObservableObject {
                     depthHeight: snapshot.depthHeight,
                     confidenceMap: snapshot.confidenceMap
                 )
+                CrashLogger.shared.logDiagnostics("Projection Result", category: .boundary, data: [
+                    "projectedPoints": projection.projectedPoints3D.count,
+                    "meshHitRate": String(format: "%.2f", projection.meshHitRate),
+                    "meanDepthConfidence": String(format: "%.2f", projection.meanDepthConfidence),
+                ])
 
                 // 3. Build boundary model.
                 // An auto-seeded boundary keeps its `.autoVision` source even
                 // if the nurse then hand-edited vertices — this matches the
                 // audit-trail design (all AI-assisted boundaries are flagged).
                 let source: BoundarySource = boundaryWasAutoSeeded ? .autoVision : .nurseDrawn
+                CrashLogger.shared.log("Step 3: Building WoundBoundary (source=\(source), mode=\(drawingMode))", category: .boundary)
                 let boundary = WoundBoundary(
                     boundaryType: drawingMode == .freeform ? .freeform : .polygon,
                     source: source,
@@ -280,21 +350,35 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 )
 
                 // 4. Run measurement engine — passes camera params + quality
+                CrashLogger.shared.log("Step 4: Running MeshMeasurementEngine.measure()", category: .measurement)
                 let measurement = try measurementEngine.measure(
                     captureData: captureData,
                     boundary: boundary,
                     qualityScore: combinedQuality
                 )
+                CrashLogger.shared.logDiagnostics("Measurement Output", category: .measurement, data: [
+                    "areaCm2": measurement.areaCm2,
+                    "lengthMm": measurement.lengthMm,
+                    "widthMm": measurement.widthMm,
+                    "maxDepthMm": measurement.maxDepthMm,
+                    "meanDepthMm": measurement.meanDepthMm,
+                    "volumeMl": measurement.volumeMl,
+                    "perimeterMm": measurement.perimeterMm,
+                    "processingTimeMs": measurement.processingTimeMs,
+                ])
 
                 // 5. Compute PUSH score
+                CrashLogger.shared.log("Step 5: Computing PUSH score", category: .measurement)
                 let pushScore = PUSHScoreCalculator.computeScore(
                     lengthMm: measurement.lengthMm,
                     widthMm: measurement.widthMm,
                     exudateAmount: exudateAmount,
                     tissueType: tissueType
                 )
+                CrashLogger.shared.log("PUSH score: \(pushScore.totalScore)", category: .measurement)
 
                 // 6. Assemble WoundScan
+                CrashLogger.shared.log("Step 6: Assembling WoundScan", category: .measurement)
                 let scan = WoundScan(
                     patientId: patientId,
                     nurseId: nurseId,
@@ -307,41 +391,84 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 )
 
                 isComputing = false
+                CrashLogger.shared.log("Measurement pipeline completed successfully", category: .measurement)
                 onMeasurementComplete?(scan)
 
             } catch {
                 isComputing = false
-                self.error = error.localizedDescription
+                CrashLogger.shared.error("Measurement pipeline FAILED", category: .measurement, error: error)
+                self.error = "Measurement failed: \(error.localizedDescription)"
             }
         }
+    }
+
+    /// Trigger measurement with default PUSH values for the auto-flow.
+    func computeMeasurementsWithDefaults() {
+        computeMeasurements(
+            patientId: "patient-001",
+            nurseId: "nurse-001",
+            facilityId: "facility-001",
+            exudateAmount: .none,
+            tissueType: .granulation
+        )
+    }
+
+    // MARK: - Geometry Helpers
+
+    /// Shoelace formula for polygon area.
+    private static func polygonArea(_ points: [CGPoint]) -> CGFloat {
+        guard points.count >= 3 else { return 0 }
+        var area: CGFloat = 0
+        let n = points.count
+        for i in 0..<n {
+            let j = (i + 1) % n
+            area += points[i].x * points[j].y
+            area -= points[j].x * points[i].y
+        }
+        return abs(area) / 2
     }
 
     // MARK: - Build CaptureData
 
     private func buildCaptureData() -> CaptureData {
-        // Pack vertices into Data
+        CrashLogger.shared.log("buildCaptureData: vertices=\(snapshot.vertices.count) faces=\(snapshot.faces.count) normals=\(snapshot.normals.count)", category: .measurement)
+        // Pack vertices into Data — extract x,y,z individually.
+        // SIMD3<Float> has 16-byte stride (backed by SIMD4 storage),
+        // but CaptureData.unpackVertices() expects tightly-packed
+        // 12-byte (3 × Float) triples. Using withUnsafeBytes(of:)
+        // on the whole SIMD3 would write 16 bytes including padding.
         var verticesData = Data()
+        verticesData.reserveCapacity(snapshot.vertices.count * 12)
         for v in snapshot.vertices {
-            var vertex = v
-            withUnsafeBytes(of: &vertex) { verticesData.append(contentsOf: $0) }
+            var x = v.x; var y = v.y; var z = v.z
+            withUnsafeBytes(of: &x) { verticesData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &y) { verticesData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &z) { verticesData.append(contentsOf: $0) }
         }
 
-        // Pack faces into Data
+        // Pack faces — same SIMD3<UInt32> padding issue.
         var facesData = Data()
+        facesData.reserveCapacity(snapshot.faces.count * 12)
         for f in snapshot.faces {
-            var face = f
-            withUnsafeBytes(of: &face) { facesData.append(contentsOf: $0) }
+            var x = f.x; var y = f.y; var z = f.z
+            withUnsafeBytes(of: &x) { facesData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &y) { facesData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &z) { facesData.append(contentsOf: $0) }
         }
 
-        // Pack normals into Data
+        // Pack normals — same SIMD3<Float> padding issue.
         var normalsData = Data()
+        normalsData.reserveCapacity(snapshot.normals.count * 12)
         for n in snapshot.normals {
-            var normal = n
-            withUnsafeBytes(of: &normal) { normalsData.append(contentsOf: $0) }
+            var x = n.x; var y = n.y; var z = n.z
+            withUnsafeBytes(of: &x) { normalsData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &y) { normalsData.append(contentsOf: $0) }
+            withUnsafeBytes(of: &z) { normalsData.append(contentsOf: $0) }
         }
 
-        // Pack depth map into Data
+        // Pack depth map into Data (Float is 4 bytes — no padding issue)
         var depthData = Data()
+        depthData.reserveCapacity(snapshot.depthMap.count * 4)
         for d in snapshot.depthMap {
             var depth = d
             withUnsafeBytes(of: &depth) { depthData.append(contentsOf: $0) }

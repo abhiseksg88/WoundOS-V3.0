@@ -49,6 +49,11 @@ public enum ContourSimplifier {
             iteration += 1
         }
 
+        // Safety: never return fewer than 3 points. If aggressive
+        // simplification collapsed too far, return the original polygon.
+        if simplified.count < 3 {
+            return polygon
+        }
         return simplified
     }
 
@@ -95,10 +100,11 @@ public enum ContourSimplifier {
         _ points: [CGPoint],
         epsilon: CGFloat
     ) -> [CGPoint] {
-        guard points.count > 2 else { return points }
-
-        let start = points.first!
-        let end = points.last!
+        guard points.count > 2,
+              let start = points.first,
+              let end = points.last else {
+            return points
+        }
 
         var maxDistance: CGFloat = 0
         var maxIndex = 0

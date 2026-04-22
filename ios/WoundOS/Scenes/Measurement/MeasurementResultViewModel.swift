@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Combine
 import WoundCore
 import WoundNetworking
@@ -112,17 +113,22 @@ final class MeasurementResultViewModel: ObservableObject {
     // MARK: - Save & Upload
 
     func saveAndUpload() {
+        CrashLogger.shared.log("saveAndUpload() called — scanId=\(scan.id)", category: .storage)
         isSaving = true
 
         Task { @MainActor in
             do {
+                CrashLogger.shared.log("Saving scan to local storage…", category: .storage)
                 try await storage.saveScan(scan)
+                CrashLogger.shared.log("Scan saved locally. Starting upload…", category: .storage)
                 isUploading = true
                 await uploadManager.enqueueUpload(scan: scan)
+                CrashLogger.shared.log("Upload enqueued successfully", category: .network)
                 isSaving = false
                 isUploading = false
                 onSaveComplete?()
             } catch {
+                CrashLogger.shared.error("saveAndUpload failed", category: .storage, error: error)
                 isSaving = false
                 saveError = error.localizedDescription
             }
@@ -130,14 +136,17 @@ final class MeasurementResultViewModel: ObservableObject {
     }
 
     func saveLocally() {
+        CrashLogger.shared.log("saveLocally() called — scanId=\(scan.id)", category: .storage)
         isSaving = true
 
         Task { @MainActor in
             do {
                 try await storage.saveScan(scan)
+                CrashLogger.shared.log("Scan saved locally", category: .storage)
                 isSaving = false
                 onSaveComplete?()
             } catch {
+                CrashLogger.shared.error("saveLocally failed", category: .storage, error: error)
                 isSaving = false
                 saveError = error.localizedDescription
             }

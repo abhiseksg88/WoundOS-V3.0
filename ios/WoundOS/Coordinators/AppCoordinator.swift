@@ -15,6 +15,7 @@ final class AppCoordinator: Coordinator {
     }
 
     func start() {
+        CrashLogger.shared.log("AppCoordinator.start() — building tab bar", category: .coordinator)
         let tabBarController = UITabBarController()
 
         // Tab 1: Scan List (patient scan history)

@@ -16,6 +16,12 @@ final class CaptureViewModel: ObservableObject {
     @Published var readiness: CaptureReadiness = .notReady(reason: .trackingNotNormal)
     @Published var error: String?
 
+    /// Live distance to surface in meters (from CaptureQualityMonitor).
+    /// Updated every readiness change. Used by the distance indicator bar.
+    var currentDistanceM: Float? {
+        qualityMonitor?.lastDistance
+    }
+
     // MARK: - Navigation
 
     /// Provides both the snapshot and the moment-of-capture quality score.
@@ -35,7 +41,11 @@ final class CaptureViewModel: ObservableObject {
 
     /// The underlying ARSession so the view controller can attach an ARSCNView.
     var arSession: ARSession? {
-        (captureProvider as? ARSessionManager)?.session
+        #if targetEnvironment(simulator)
+        return nil
+        #else
+        return (captureProvider as? ARSessionManager)?.session
+        #endif
     }
 
     /// True when all four strict gates are satisfied.
@@ -75,14 +85,19 @@ final class CaptureViewModel: ObservableObject {
     // MARK: - Session Lifecycle
 
     func startSession() {
+        CrashLogger.shared.log("Starting AR session", category: .capture)
+        CrashLogger.shared.log("LiDAR available: \(isLiDARAvailable)", category: .capture)
         do {
             try captureProvider.startSession()
+            CrashLogger.shared.log("AR session started successfully", category: .capture)
         } catch {
+            CrashLogger.shared.error("AR session start failed", category: .capture, error: error)
             self.error = error.localizedDescription
         }
     }
 
     func pauseSession() {
+        CrashLogger.shared.log("Pausing AR session", category: .capture)
         captureProvider.pauseSession()
     }
 
@@ -90,9 +105,14 @@ final class CaptureViewModel: ObservableObject {
 
     func capture() {
         // Strict gate enforcement at the call site too
-        guard readiness.isReady else { return }
+        guard readiness.isReady else {
+            CrashLogger.shared.log("Capture blocked — not ready: \(readiness)", category: .capture, level: .warning)
+            return
+        }
+        CrashLogger.shared.log("Capture triggered — freezing AR frame", category: .capture)
         do {
             let snapshot = try captureProvider.captureSnapshot()
+            CrashLogger.shared.log("Snapshot captured: \(snapshot.vertices.count) vertices, \(snapshot.faces.count) faces", category: .capture)
             // Stamp pre-capture quality info; mesh hit rate / depth confidence
             // get filled in by BoundaryDrawingViewModel after projection runs.
             let preQuality = qualityMonitor?.qualityScoreSnapshot(
@@ -102,6 +122,7 @@ final class CaptureViewModel: ObservableObject {
             )
             onCaptureComplete?(snapshot, preQuality)
         } catch {
+            CrashLogger.shared.error("Capture snapshot failed", category: .capture, error: error)
             self.error = error.localizedDescription
         }
     }

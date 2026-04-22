@@ -14,39 +14,79 @@ final class DependencyContainer {
     // MARK: - Capture
 
     lazy var captureProvider: CaptureProviderProtocol = {
-        ARSessionManager()
+        CrashLogger.shared.log("Initializing ARSessionManager", category: .capture)
+        return ARSessionManager()
     }()
 
     // MARK: - Measurement
 
     lazy var measurementEngine: MeshMeasurementEngine = {
-        MeshMeasurementEngine()
+        CrashLogger.shared.log("Initializing MeshMeasurementEngine", category: .measurement)
+        return MeshMeasurementEngine()
     }()
 
     // MARK: - Auto-Segmentation
 
-    /// The on-device wound segmenter. Currently backed by Apple Vision's
-    /// `VNGenerateForegroundInstanceMaskRequest` (iOS 17+). Returns `nil`
-    /// on older OSes — the drawing scene falls back to manual polygon /
-    /// freeform drawing and hides the Auto segment.
-    ///
-    /// Phase 2 will swap this for a CoreML wound-fine-tuned SAM 2 / U-Net
-    /// conforming to the same `WoundSegmenter` protocol — no caller changes.
+    /// Primary segmenter: server-side SAM 2 via WoundOS backend.
+    /// Fallback chain: ServerSegmenter → VisionForegroundSegmenter → nil (manual).
     lazy var autoSegmenter: WoundSegmenter? = {
+        // 1. Server-side SAM 2 (primary — best accuracy, no app size cost)
+        CrashLogger.shared.log("Initializing ServerSegmenter (SAM 2 backend)", category: .segmentation)
+        let client = self.apiClient
+        let onDeviceFallback = self.fallbackSegmenter
+        let serverSegmenter = ServerSegmenter(
+            segmentRequest: { jpegData, tapPoint, imageWidth, imageHeight in
+                let response = try await client.segmentImage(
+                    jpegData: jpegData,
+                    tapPoint: tapPoint,
+                    imageWidth: imageWidth,
+                    imageHeight: imageHeight
+                )
+                return (
+                    polygon: response.polygon,
+                    confidence: response.confidence,
+                    modelVersion: response.modelVersion
+                )
+            },
+            fallback: onDeviceFallback
+        )
+        return serverSegmenter
+    }()
+
+    /// On-device fallback segmenter used when the server is unreachable.
+    lazy var fallbackSegmenter: WoundSegmenter? = {
+        CrashLogger.shared.log("Attempting WoundAmbitSegmenter (CoreML)…", category: .segmentation)
+        if let ambit = try? WoundAmbitSegmenter() {
+            CrashLogger.shared.log("WoundAmbitSegmenter initialized successfully", category: .segmentation)
+            return ambit
+        }
         if #available(iOS 17.0, *) {
+            CrashLogger.shared.log("VisionForegroundSegmenter initialized (fallback)", category: .segmentation)
             return VisionForegroundSegmenter()
         }
+        CrashLogger.shared.log("No fallback segmenter available", category: .segmentation, level: .warning)
         return nil
     }()
 
     // MARK: - Networking
 
-    lazy var apiClient: APIClient = {
-        APIClient()
+    lazy var authProvider: AuthProvider = {
+        AuthProvider(
+            tokenStore: KeychainTokenStore(),
+            firebase: StubFirebaseAuth()
+        )
+    }()
+
+    lazy var apiClient: WoundOSClient = {
+        WoundOSClient(
+            config: .staging,
+            session: .shared,
+            authProvider: authProvider
+        )
     }()
 
     lazy var uploadManager: UploadManager = {
-        UploadManager(apiClient: apiClient, storage: localStorage)
+        UploadManager(client: apiClient, storage: localStorage)
     }()
 
     // MARK: - Storage
@@ -67,7 +107,9 @@ final class LocalScanStorage: StorageProviderProtocol {
     private let decoder = JSONDecoder.woundOS
 
     private var scansDirectory: URL {
-        let docs = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        guard let docs = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return fileManager.temporaryDirectory.appendingPathComponent("WoundScans", isDirectory: true)
+        }
         let dir = docs.appendingPathComponent("WoundScans", isDirectory: true)
         try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
