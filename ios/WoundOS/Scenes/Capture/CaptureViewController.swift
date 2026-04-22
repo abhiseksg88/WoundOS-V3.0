@@ -251,6 +251,7 @@ final class CaptureViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.accessibilityIdentifier = "v4_capture_screen"
         setupUI()
         bindViewModel()
     }

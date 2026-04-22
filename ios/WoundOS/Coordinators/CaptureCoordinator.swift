@@ -1,5 +1,7 @@
 import UIKit
+import SwiftUI
 import WoundCore
+import WoundCapture
 
 // MARK: - Capture Coordinator
 
@@ -24,7 +26,14 @@ final class CaptureCoordinator: Coordinator {
     // MARK: - Step 1: AR Capture
 
     private func showCapture() {
-        CrashLogger.shared.log("Navigating to AR Capture screen", category: .coordinator)
+        // V5 path: enhanced LiDAR capture with guided SwiftUI views
+        if FeatureFlags.isEnabled(.v5LidarCapture) {
+            showV5Capture()
+            return
+        }
+
+        // V4 path: unchanged
+        CrashLogger.shared.log("Navigating to AR Capture screen (V4)", category: .coordinator)
         let viewModel = CaptureViewModel(captureProvider: dependencies.captureProvider)
         viewModel.onCaptureComplete = { [weak self] snapshot, qualityScore in
             CrashLogger.shared.log("Capture complete — transitioning to Boundary Drawing", category: .coordinator)
@@ -47,6 +56,46 @@ final class CaptureCoordinator: Coordinator {
         let viewController = CaptureViewController(viewModel: viewModel)
         viewController.title = "Capture Wound"
         navigationController.setViewControllers([viewController], animated: false)
+    }
+
+    // MARK: - V5 Capture Path
+
+    private func showV5Capture() {
+        CrashLogger.shared.log("Navigating to V5 Capture screen", category: .coordinator)
+        guard let captureSession = dependencies.v5CaptureSession else {
+            CrashLogger.shared.error("V5 flag ON but v5CaptureSession is nil — falling back to V4", category: .coordinator)
+            showCapture()
+            return
+        }
+
+        let viewModel = V5CaptureViewModel(captureSession: captureSession)
+        viewModel.onCaptureComplete = { [weak self] bundle in
+            CrashLogger.shared.log("V5 Capture complete — transitioning to Boundary Drawing", category: .coordinator)
+            CrashLogger.shared.logDiagnostics("V5 CaptureBundle", category: .capture, data: [
+                "captureId": bundle.id.uuidString,
+                "mode": bundle.captureMode.rawValue,
+                "qualityTier": bundle.qualityScore.tier.rawValue,
+                "confidence": bundle.confidenceSummary.overallScore,
+                "vertexCount": bundle.captureData.vertexCount,
+                "faceCount": bundle.captureData.faceCount,
+            ])
+
+            // Persist the bundle to SwiftData
+            if let store = self?.dependencies.captureBundleStore {
+                Task { @MainActor in
+                    try? store.save(bundle)
+                }
+            }
+
+            // Bridge CaptureBundle → CaptureSnapshot for existing V4 pipeline
+            let snapshot = bundle.captureData.toCaptureSnapshot(timestamp: bundle.capturedAt)
+            let qualityScore = bundle.qualityScore
+            self?.showBoundaryDrawing(snapshot: snapshot, qualityScore: qualityScore)
+        }
+
+        let hostingVC = V5CaptureHostingController(viewModel: viewModel)
+        hostingVC.title = "Capture Wound"
+        navigationController.setViewControllers([hostingVC], animated: false)
     }
 
     // MARK: - Step 2: Boundary Drawing

@@ -16,8 +16,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
 
-        let window = UIWindow(windowScene: windowScene)
+        // Configure feature flags
         let container = DependencyContainer()
+        FeatureFlags.configure(store: container.featureFlagStore)
+
+        // UI test launch arguments
+        if ProcessInfo.processInfo.arguments.contains("--enable-v5-lidar-capture") {
+            FeatureFlags.setEnabled(.v5LidarCapture, true)
+        }
+
+        CrashLogger.shared.log("Feature flags configured, v5LidarCapture=\(FeatureFlags.isEnabled(.v5LidarCapture))", category: .app)
+
+        let window = UIWindow(windowScene: windowScene)
         CrashLogger.shared.log("DependencyContainer created", category: .app)
         let navigationController = UINavigationController()
 

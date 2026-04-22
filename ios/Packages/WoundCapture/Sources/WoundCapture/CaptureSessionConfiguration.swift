@@ -22,6 +22,14 @@ public struct CaptureSessionConfiguration {
         minimumTrackingConfidence: 0.8
     )
 
+    /// V5 configuration with tighter optimal distance range (20-35 cm)
+    public static let v5Default = CaptureSessionConfiguration(
+        optimalDistanceRange: 0.20...0.35,
+        enableMeshClassification: false,
+        preferredImageResolution: .high,
+        minimumTrackingConfidence: 0.8
+    )
+
     public init(
         optimalDistanceRange: ClosedRange<Float>,
         enableMeshClassification: Bool,
