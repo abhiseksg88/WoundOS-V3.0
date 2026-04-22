@@ -22,7 +22,7 @@ final class TriangleUtilsTests: XCTestCase {
         let v2 = SIMD3<Float>(1, sqrt(3.0), 0)
 
         let area = TriangleUtils.triangleArea(v0, v1, v2)
-        let expected = sqrt(3.0)  // side² × √3/4 = 4 × √3/4
+        let expected: Float = sqrt(3.0)  // side² × √3/4 = 4 × √3/4
         XCTAssertEqual(area, expected, accuracy: 1e-5)
     }
 

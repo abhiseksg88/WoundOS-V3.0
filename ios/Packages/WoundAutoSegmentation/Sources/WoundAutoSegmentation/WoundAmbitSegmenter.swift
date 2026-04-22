@@ -95,7 +95,7 @@ public final class WoundAmbitSegmenter: WoundSegmenter {
             let input = try MLDictionaryFeatureProvider(dictionary: [
                 "image": MLFeatureValue(pixelBuffer: resizedBuffer)
             ])
-            prediction = try model.prediction(from: input)
+            prediction = try await model.prediction(from: input)
         } catch {
             throw SegmentationError.predictionFailed
         }

@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "WoundCore",
-    platforms: [.iOS(.v16)],
+    platforms: [.iOS(.v17), .macOS(.v12)],
     products: [
         .library(name: "WoundCore", targets: ["WoundCore"]),
     ],

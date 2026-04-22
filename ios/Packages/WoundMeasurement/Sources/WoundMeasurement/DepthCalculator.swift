@@ -1,5 +1,8 @@
 import Foundation
+import os
 import simd
+
+private let logger = Logger(subsystem: "com.woundos.app", category: "Depth")
 
 // MARK: - Depth Calculator
 
@@ -22,6 +25,12 @@ public enum DepthCalculator {
         public let referencePlaneNormal: SIMD3<Float>
         /// Per-vertex depth values (meters, signed: positive = below plane)
         public let vertexDepths: [Float]
+        /// Number of interior vertices below the reference plane
+        public let belowPlaneCount: Int
+        /// Number of interior vertices above the reference plane
+        public let abovePlaneCount: Int
+        /// Whether the result is considered reliable
+        public let isReliable: Bool
     }
 
     /// Compute depth from boundary points and interior mesh vertices.
@@ -35,8 +44,11 @@ public enum DepthCalculator {
         interiorVertices: [SIMD3<Float>],
         cameraPosition: SIMD3<Float>
     ) -> DepthResult? {
+        logger.info("computeDepth: boundary=\(boundaryPoints3D.count) pts, interior=\(interiorVertices.count) vertices")
+
         // Fit reference plane to boundary (wound rim)
         guard let plane = TriangleUtils.fitPlane(to: boundaryPoints3D) else {
+            logger.error("Plane fit failed — insufficient boundary points or degenerate geometry")
             return nil
         }
 
@@ -47,6 +59,8 @@ public enum DepthCalculator {
         if simd_dot(planeNormal, toCamera) < 0 {
             planeNormal = -planeNormal
         }
+
+        logger.info("Plane: center=(\(plane.point.x), \(plane.point.y), \(plane.point.z)) normal=(\(planeNormal.x), \(planeNormal.y), \(planeNormal.z))")
 
         // Compute signed distance of each interior vertex from the reference plane.
         // Negative distance = below the plane = wound depth.
@@ -65,6 +79,16 @@ public enum DepthCalculator {
 
         // Only consider positive depths (below the rim plane)
         let positiveDepths = depths.filter { $0 > 0 }
+        let negativeDepths = depths.filter { $0 <= 0 }
+
+        let belowCount = positiveDepths.count
+        let aboveCount = negativeDepths.count
+        let total = depths.count
+
+        let belowPct = total > 0 ? Double(belowCount) / Double(total) * 100.0 : 0
+        let abovePct = total > 0 ? Double(aboveCount) / Double(total) * 100.0 : 0
+
+        logger.info("Depth distribution: \(belowCount) below plane (\(belowPct)%), \(aboveCount) above plane (\(abovePct)%)")
 
         let maxDepthM = positiveDepths.max() ?? 0
         let meanDepthM: Float
@@ -74,12 +98,27 @@ public enum DepthCalculator {
             meanDepthM = positiveDepths.reduce(0, +) / Float(positiveDepths.count)
         }
 
+        // Reliability check: unreliable if < 10 interior vertices below plane
+        // or > 30% of vertices are above the plane (indicating poor plane fit)
+        let isReliable = belowCount >= 10 && abovePct <= 30.0
+
+        let maxMm = Double(maxDepthM) * 1000.0
+        let meanMm = Double(meanDepthM) * 1000.0
+        logger.info("Depth result: max=\(maxMm)mm, mean=\(meanMm)mm, reliable=\(isReliable)")
+
+        if !isReliable {
+            logger.warning("Depth UNRELIABLE: belowPlane=\(belowCount) (<10?) abovePct=\(abovePct)% (>30%?)")
+        }
+
         return DepthResult(
             maxDepthMm: Double(maxDepthM) * 1000.0,  // meters to mm
             meanDepthMm: Double(meanDepthM) * 1000.0,
             referencePlanePoint: plane.point,
             referencePlaneNormal: planeNormal,
-            vertexDepths: depths
+            vertexDepths: depths,
+            belowPlaneCount: belowCount,
+            abovePlaneCount: aboveCount,
+            isReliable: isReliable
         )
     }
 }

@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "WoundMeasurement",
-    platforms: [.iOS(.v16)],
+    platforms: [.iOS(.v17), .macOS(.v12)],
     products: [
         .library(name: "WoundMeasurement", targets: ["WoundMeasurement"]),
     ],
