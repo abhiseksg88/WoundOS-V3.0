@@ -155,16 +155,20 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 )
                 CrashLogger.shared.log("Segmentation success: \(result.polygonImageSpace.count) polygon points, model=\(result.modelIdentifier)", category: .segmentation)
 
-                // Sanity check: reject polygons that cover > 40% of the image.
-                // A wound boundary should never be this large — it means the
-                // segmenter grabbed the entire foreground instead of the wound.
+                // Sanity check: reject polygons that cover an unreasonable
+                // fraction of the image. The threshold depends on the model:
+                // SAM 2 (server) is wound-specific and reliable at high coverage;
+                // on-device fallbacks (Vision/CoreML) are more prone to grabbing
+                // the entire foreground.
                 let polyArea = Self.polygonArea(result.polygonImageSpace)
                 let imageArea = result.imageSize.width * result.imageSize.height
                 let coverage = polyArea / imageArea
-                CrashLogger.shared.log("Polygon coverage: \(String(format: "%.1f%%", coverage * 100)) of image", category: .segmentation)
+                let isSAM2 = result.modelIdentifier.hasPrefix("sam2")
+                let maxCoverage: CGFloat = isSAM2 ? 0.80 : 0.50
+                CrashLogger.shared.log("Polygon coverage: \(String(format: "%.1f%%", coverage * 100)) of image, model=\(result.modelIdentifier), maxAllowed=\(String(format: "%.0f%%", maxCoverage * 100))", category: .segmentation)
 
-                if coverage > 0.40 {
-                    CrashLogger.shared.log("Polygon rejected — covers \(String(format: "%.0f%%", coverage * 100)) of image", category: .segmentation, level: .warning)
+                if coverage > maxCoverage {
+                    CrashLogger.shared.log("Polygon rejected — covers \(String(format: "%.0f%%", coverage * 100)) of image (max \(String(format: "%.0f%%", maxCoverage * 100)))", category: .segmentation, level: .warning)
                     self.error = "Detection too large — tap directly on the wound, or use Draw Manually."
                     return
                 }
