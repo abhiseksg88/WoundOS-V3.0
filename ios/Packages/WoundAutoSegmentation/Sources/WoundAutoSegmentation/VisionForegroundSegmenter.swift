@@ -7,6 +7,13 @@ import Vision
 import UIKit
 #endif
 
+// DEPRECATED for V5 production path.
+// Retained for reference and for unit tests only.
+// Caused false-positive segmentation on non-wounds (hairbrush, credit card,
+// bowl) during Phase 2 adversarial testing — produced measurements like
+// 1932 cm² on non-wound objects. Do not reinstate without wound-specific
+// gate in front.
+//
 // MARK: - Vision Foreground Segmenter (iOS 17+)
 
 /// Day-1 zero-shot segmenter backed by Apple's `VNGenerateForegroundInstanceMaskRequest`.

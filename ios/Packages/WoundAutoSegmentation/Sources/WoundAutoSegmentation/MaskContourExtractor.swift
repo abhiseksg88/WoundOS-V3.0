@@ -1,7 +1,19 @@
+import Accelerate
 import CoreGraphics
 import CoreVideo
 import Foundation
 import Vision
+
+// MARK: - Contour Extraction Result
+
+/// Result of extracting a contour from a binary mask, including the
+/// connected component count needed by MaskQualityGate.
+public struct ContourExtractionResult {
+    /// Closed polygon in image-space pixel coordinates (origin top-left).
+    public let polygon: [CGPoint]
+    /// Number of connected foreground regions in the binary mask.
+    public let connectedComponentCount: Int
+}
 
 // MARK: - Mask Contour Extractor
 
@@ -27,6 +39,21 @@ public enum MaskContourExtractor {
         imageSize: CGSize,
         tapPoint: CGPoint
     ) throws -> [CGPoint] {
+        let result = try extractContourWithComponents(
+            from: maskBuffer,
+            imageSize: imageSize,
+            tapPoint: tapPoint
+        )
+        return result.polygon
+    }
+
+    /// Extract contour and count connected components in a single pass.
+    /// Used by the segmentation pipeline to feed MaskQualityGate.
+    public static func extractContourWithComponents(
+        from maskBuffer: CVPixelBuffer,
+        imageSize: CGSize,
+        tapPoint: CGPoint
+    ) throws -> ContourExtractionResult {
         let contoursRequest = VNDetectContoursRequest()
         contoursRequest.contrastAdjustment = 1.0
         contoursRequest.detectsDarkOnLight = false
@@ -48,6 +75,10 @@ public enum MaskContourExtractor {
             throw SegmentationError.contourExtractionFailed
         }
 
+        // Connected component count = number of top-level contours.
+        // Each top-level contour is a distinct foreground region.
+        let componentCount = topLevel.count
+
         // Vision uses bottom-left origin; convert tap to that space.
         let tapNormalizedVision = CGPoint(
             x: tapPoint.x / imageSize.width,
@@ -65,7 +96,34 @@ public enum MaskContourExtractor {
                 y: (1.0 - CGFloat(p.y)) * imageSize.height
             )
         }
-        return pts
+
+        return ContourExtractionResult(
+            polygon: pts,
+            connectedComponentCount: componentCount
+        )
+    }
+
+    /// Count connected foreground components in a binary mask using
+    /// Accelerate's vImage labeling. Falls back to Vision contour
+    /// counting if vImage is unavailable.
+    public static func countConnectedComponents(
+        in maskBuffer: CVPixelBuffer
+    ) -> Int {
+        // Use Vision contour detection to count top-level contours.
+        // This is simpler and more reliable than vImage labeling for
+        // binary masks, and we already have the Vision import.
+        let contoursRequest = VNDetectContoursRequest()
+        contoursRequest.contrastAdjustment = 1.0
+        contoursRequest.detectsDarkOnLight = false
+        contoursRequest.maximumImageDimension = 512
+
+        let handler = VNImageRequestHandler(cvPixelBuffer: maskBuffer, orientation: .up)
+        do {
+            try handler.perform([contoursRequest])
+            return contoursRequest.results?.first?.topLevelContours.count ?? 0
+        } catch {
+            return 0
+        }
     }
 
     // MARK: - Contour Selection

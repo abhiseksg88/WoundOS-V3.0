@@ -36,6 +36,7 @@ public enum SegmentationError: Error, LocalizedError {
     case invalidInputImage
     case modelLoadFailed
     case predictionFailed
+    case serviceUnavailable(underlying: Error?)
 
     public var errorDescription: String? {
         switch self {
@@ -55,6 +56,8 @@ public enum SegmentationError: Error, LocalizedError {
             return "Unable to load the wound segmentation model."
         case .predictionFailed:
             return "Wound segmentation model prediction failed."
+        case .serviceUnavailable:
+            return "Segmentation service unavailable. Please retry or use Draw Manually."
         }
     }
 }

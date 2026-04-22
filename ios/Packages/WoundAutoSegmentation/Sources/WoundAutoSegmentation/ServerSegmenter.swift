@@ -12,8 +12,9 @@ import UIKit
 /// POST /v1/segment endpoint (SAM 2) and converts the response polygon
 /// into a `SegmentationResult`.
 ///
-/// This is the primary segmenter for clinical use. Falls back to
-/// `VisionForegroundSegmenter` when the server is unreachable.
+/// This is the primary segmenter for clinical use. When the server is
+/// unreachable, returns a rejected SegmentationResult with a specific
+/// reason — no silent fallback to VisionForegroundSegmenter.
 public final class ServerSegmenter: WoundSegmenter {
 
     public static let modelIdentifier = "sam2.server.v1"
@@ -30,11 +31,14 @@ public final class ServerSegmenter: WoundSegmenter {
     ) async throws -> (polygon: [[Double]], confidence: Double, modelVersion: String)
 
     private let segmentRequest: SegmentRequest
-    private let fallback: WoundSegmenter?
+    private let qualityThresholds: MaskQualityThresholds
 
-    public init(segmentRequest: @escaping SegmentRequest, fallback: WoundSegmenter? = nil) {
+    public init(
+        segmentRequest: @escaping SegmentRequest,
+        qualityThresholds: MaskQualityThresholds = .default
+    ) {
         self.segmentRequest = segmentRequest
-        self.fallback = fallback
+        self.qualityThresholds = qualityThresholds
     }
 
     public func segment(
@@ -43,10 +47,11 @@ public final class ServerSegmenter: WoundSegmenter {
     ) async throws -> SegmentationResult {
         let imageWidth = image.width
         let imageHeight = image.height
+        let imageSize = CGSize(width: imageWidth, height: imageHeight)
+        let startTime = CFAbsoluteTimeGetCurrent()
 
         // Convert CGImage to JPEG data
         guard let jpegData = cgImageToJPEG(image) else {
-            if let fallback { return try await fallback.segment(image: image, tapPoint: tapPoint) }
             throw SegmentationError.invalidInputImage
         }
 
@@ -59,6 +64,8 @@ public final class ServerSegmenter: WoundSegmenter {
                 imageHeight
             )
 
+            let latencyMs = (CFAbsoluteTimeGetCurrent() - startTime) * 1000
+
             // Convert [[Double]] polygon to [CGPoint]
             let polygon = response.polygon.compactMap { pair -> CGPoint? in
                 guard pair.count >= 2 else { return nil }
@@ -66,20 +73,35 @@ public final class ServerSegmenter: WoundSegmenter {
             }
 
             guard polygon.count >= 3 else {
-                if let fallback { return try await fallback.segment(image: image, tapPoint: tapPoint) }
                 throw SegmentationError.contourExtractionFailed
             }
 
+            // Run quality gate on the result.
+            // Connected components = 1 for server results (SAM 2 returns
+            // a single mask per tap point).
+            let qualityResult = MaskQualityGate.evaluate(
+                polygon: polygon,
+                imageSize: imageSize,
+                confidence: Float(response.confidence),
+                connectedComponents: 1,
+                thresholds: qualityThresholds
+            )
+
             return SegmentationResult(
                 polygonImageSpace: polygon,
-                imageSize: CGSize(width: imageWidth, height: imageHeight),
+                imageSize: imageSize,
                 confidence: Float(response.confidence),
-                modelIdentifier: response.modelVersion
+                modelIdentifier: response.modelVersion,
+                connectedComponents: 1,
+                qualityResult: qualityResult,
+                inferenceLatencyMs: latencyMs
             )
+        } catch let segError as SegmentationError {
+            throw segError
         } catch {
-            // Network failure → fall back to on-device segmentation
-            if let fallback { return try await fallback.segment(image: image, tapPoint: tapPoint) }
-            throw error
+            // Network failure — no silent fallback. Return a rejected result
+            // so the UI can show a specific message.
+            throw SegmentationError.serviceUnavailable(underlying: error)
         }
     }
 

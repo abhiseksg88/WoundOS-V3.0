@@ -49,12 +49,21 @@ final class DependencyContainer {
     // MARK: - Auto-Segmentation
 
     /// Primary segmenter: server-side SAM 2 via WoundOS backend.
-    /// Fallback chain: ServerSegmenter → VisionForegroundSegmenter → nil (manual).
+    /// No fallback to VisionForegroundSegmenter — it caused false-positive
+    /// measurements on non-wounds (hairbrush, credit card, bowl) during
+    /// Phase 2 adversarial testing. When server is unreachable, the error
+    /// bubbles up and the UI shows "Draw Manually".
     lazy var autoSegmenter: WoundSegmenter? = {
-        // 1. Server-side SAM 2 (primary — best accuracy, no app size cost)
-        CrashLogger.shared.log("Initializing ServerSegmenter (SAM 2 backend)", category: .segmentation)
+        let preferOnDevice = FeatureFlags.isEnabled(.onDeviceSegmentation)
+        CrashLogger.shared.log(
+            "Segmenter selection: preferOnDevice=\(preferOnDevice), effectiveSegmenter=ServerSegmenter",
+            category: .segmentation
+        )
+
+        // Phase 3a.1: flag is read and logged but behavior is identical
+        // since FUSegNet is not yet wired. Phase 3a.2 will switch primary
+        // between Server and FUSegNet based on this flag.
         let client = self.apiClient
-        let onDeviceFallback = self.fallbackSegmenter
         let serverSegmenter = ServerSegmenter(
             segmentRequest: { jpegData, tapPoint, imageWidth, imageHeight in
                 let response = try await client.segmentImage(
@@ -68,26 +77,14 @@ final class DependencyContainer {
                     confidence: response.confidence,
                     modelVersion: response.modelVersion
                 )
-            },
-            fallback: onDeviceFallback
+            }
         )
         return serverSegmenter
     }()
 
-    /// On-device fallback segmenter used when the server is unreachable.
-    lazy var fallbackSegmenter: WoundSegmenter? = {
-        CrashLogger.shared.log("Attempting WoundAmbitSegmenter (CoreML)…", category: .segmentation)
-        if let ambit = try? WoundAmbitSegmenter() {
-            CrashLogger.shared.log("WoundAmbitSegmenter initialized successfully", category: .segmentation)
-            return ambit
-        }
-        if #available(iOS 17.0, *) {
-            CrashLogger.shared.log("VisionForegroundSegmenter initialized (fallback)", category: .segmentation)
-            return VisionForegroundSegmenter()
-        }
-        CrashLogger.shared.log("No fallback segmenter available", category: .segmentation, level: .warning)
-        return nil
-    }()
+    /// Mask refiner — V6 extension point. For V5 this is a no-op
+    /// (IdentityMaskRefiner returns the mask unchanged with zero latency).
+    lazy var maskRefiner: any MaskRefiner = IdentityMaskRefiner()
 
     // MARK: - Networking
 

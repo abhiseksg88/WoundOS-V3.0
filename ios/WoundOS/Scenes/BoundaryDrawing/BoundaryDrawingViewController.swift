@@ -2,6 +2,7 @@ import UIKit
 import Combine
 import WoundCore
 import WoundBoundary
+import WoundAutoSegmentation
 
 // MARK: - Boundary Drawing View Controller
 
@@ -403,10 +404,30 @@ final class BoundaryDrawingViewController: UIViewController {
             }
             .store(in: &cancellables)
 
+        // Quality gate rejection → red instruction text with specific message.
+        // Draw Manually remains prominent as the fallback.
+        viewModel.$lastQualityResult
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] result in
+                guard let self, let result else { return }
+                if case .reject(let reason, _) = result {
+                    let msg = MaskQualityGate.userMessage(for: reason)
+                    self.instructionLabel.text = msg
+                    self.instructionLabel.textColor = WOColors.flagRed
+                    // Disable Measure since boundary is rejected
+                    self.measureButton.isEnabled = false
+                    self.measureButton.alpha = 0.5
+                }
+            }
+            .store(in: &cancellables)
+
         viewModel.autoSegmentationResult
             .receive(on: DispatchQueue.main)
             .sink { [weak self] polygon in
                 guard let self else { return }
+                // Reset instruction color (may have been red from prior rejection)
+                self.instructionLabel.textColor = .white
+
                 // 1. Show the detected boundary on the canvas WITHOUT triggering
                 //    the delegate → didFinalizeBoundary → O(n²) validate chain.
                 //    autoFinalizeBoundary handles finalization with relaxed validation.

@@ -121,6 +121,9 @@ final class BoundaryDrawingViewModel: ObservableObject {
 
     // MARK: - Auto Segmentation
 
+    /// Most recent quality gate result for the UI to inspect.
+    @Published var lastQualityResult: MaskQualityResult?
+
     func runAutoSegmentation(tapPoint: CGPoint, geometry: ImageViewGeometry) {
         CrashLogger.shared.log("Auto-segmentation requested at tap=\(tapPoint)", category: .segmentation)
         guard let segmenter else {
@@ -153,23 +156,34 @@ final class BoundaryDrawingViewModel: ObservableObject {
                     image: cgImage,
                     tapPoint: sensorTap
                 )
-                CrashLogger.shared.log("Segmentation success: \(result.polygonImageSpace.count) polygon points, model=\(result.modelIdentifier)", category: .segmentation)
+                CrashLogger.shared.log(
+                    "Segmentation result: \(result.polygonImageSpace.count) pts, "
+                    + "model=\(result.modelIdentifier), "
+                    + "confidence=\(String(format: "%.2f", result.confidence)), "
+                    + "components=\(result.connectedComponents), "
+                    + "quality=\(result.qualityResult), "
+                    + "latency=\(String(format: "%.0f", result.inferenceLatencyMs))ms",
+                    category: .segmentation
+                )
 
-                // Sanity check: reject polygons that cover an unreasonable
-                // fraction of the image. The threshold depends on the model:
-                // SAM 2 (server) is wound-specific and reliable at high coverage;
-                // on-device fallbacks (Vision/CoreML) are more prone to grabbing
-                // the entire foreground.
-                let polyArea = Self.polygonArea(result.polygonImageSpace)
-                let imageArea = result.imageSize.width * result.imageSize.height
-                let coverage = polyArea / imageArea
-                let isSAM2 = result.modelIdentifier.hasPrefix("sam2")
-                let maxCoverage: CGFloat = isSAM2 ? 0.80 : 0.50
-                CrashLogger.shared.log("Polygon coverage: \(String(format: "%.1f%%", coverage * 100)) of image, model=\(result.modelIdentifier), maxAllowed=\(String(format: "%.0f%%", maxCoverage * 100))", category: .segmentation)
+                lastQualityResult = result.qualityResult
 
-                if coverage > maxCoverage {
-                    CrashLogger.shared.log("Polygon rejected — covers \(String(format: "%.0f%%", coverage * 100)) of image (max \(String(format: "%.0f%%", maxCoverage * 100)))", category: .segmentation, level: .warning)
-                    self.error = "Detection too large — tap directly on the wound, or use Draw Manually."
+                // Record telemetry for every segmentation attempt
+                let telemetry = SegmentationTelemetryRecord.from(
+                    result: result,
+                    onDeviceFlagState: FeatureFlags.isEnabled(.onDeviceSegmentation)
+                )
+                SegmentationTelemetryStore.shared.record(telemetry)
+
+                // Quality gate rejection — show specific user message
+                if !result.isUsable, let reason = result.qualityResult.rejectionReason {
+                    let userMsg = MaskQualityGate.userMessage(for: reason)
+                    CrashLogger.shared.log(
+                        "Mask rejected: \(reason.rawValue) — \(result.qualityResult.rejectionDetail ?? "")",
+                        category: .segmentation,
+                        level: .warning
+                    )
+                    self.error = userMsg
                     return
                 }
 
@@ -182,7 +196,12 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 autoSegmentationResult.send(viewPolygon)
             } catch {
                 CrashLogger.shared.error("Auto-segmentation failed", category: .segmentation, error: error)
-                self.error = "Segmentation failed: \(error.localizedDescription)"
+                if let segErr = error as? SegmentationError,
+                   case .serviceUnavailable = segErr {
+                    self.error = "Segmentation unavailable. Please retry, check connection, or use Draw Manually."
+                } else {
+                    self.error = "Segmentation failed: \(error.localizedDescription)"
+                }
             }
         }
     }
