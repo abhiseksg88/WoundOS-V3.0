@@ -143,6 +143,17 @@ public final class MeshMeasurementEngine {
         let reductionPct = rawPerimeterMm > 0 ? (1.0 - perimeterMm / rawPerimeterMm) * 100.0 : 0
         logger.info("Step 5: Perimeter — raw=\(rawPerimeterMm)mm smoothed=\(perimeterMm)mm reduction=\(reductionPct)%")
 
+        // DIAGNOSTIC: naive max 3D distance (should approximate length)
+        var naiveMaxDist3D: Float = 0
+        let sampleStride = max(1, points3D.count / 100)
+        for i in Swift.stride(from: 0, to: points3D.count, by: sampleStride) {
+            for j in Swift.stride(from: i + 1, to: points3D.count, by: sampleStride) {
+                naiveMaxDist3D = max(naiveMaxDist3D, simd_distance(points3D[i], points3D[j]))
+            }
+        }
+        let naiveDiameterMm = Double(naiveMaxDist3D) * 1000.0
+        logger.info("DIAGNOSTIC: naive max 3D boundary distance = \(naiveDiameterMm)mm")
+
         // Step 6: Length and width via rotating calipers — KEEP THE ENDPOINTS
         let dimensions: DimensionCalculator.DimensionResult
         if let depthResult {
@@ -162,6 +173,10 @@ public final class MeshMeasurementEngine {
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
         let processingTimeMs = Int(elapsed * 1000)
         logger.info("Pipeline complete in \(processingTimeMs)ms — area=\(areaCm2)cm² len=\(dimensions.lengthMm)mm w=\(dimensions.widthMm)mm depth=\(maxDepthMm)mm vol=\(volumeMl)mL perim=\(perimeterMm)mm")
+
+        // DIAGNOSTIC: compare dimension result to naive distance
+        let lenNaiveRatio = naiveDiameterMm > 0 ? dimensions.lengthMm / naiveDiameterMm : 0
+        logger.info("DIAGNOSTIC COMPARE: dimCalc.length=\(dimensions.lengthMm)mm naive=\(naiveDiameterMm)mm ratio=\(lenNaiveRatio) perim=\(perimeterMm)mm perim/length=\(perimeterMm / max(1, dimensions.lengthMm))")
 
         // Build the quality score with mesh hit rate + vertex count from this run
         let finalQuality = qualityScore.map { partial in

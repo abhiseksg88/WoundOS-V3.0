@@ -1,5 +1,8 @@
 import Foundation
+import os
 import simd
+
+private let logger = Logger(subsystem: "com.woundos.app", category: "Dimensions")
 
 // MARK: - Dimension Calculator
 
@@ -36,6 +39,14 @@ public enum DimensionCalculator {
             )
         }
 
+        // === DIAGNOSTIC: 3D bounding box of input boundary ===
+        let (bb3D, naiveMaxDist) = boundaryDiagnostics(boundaryPoints3D)
+        logger.info("INPUT: \(boundaryPoints3D.count) points, 3D bbox: x[\(bb3D.minX)…\(bb3D.maxX)] y[\(bb3D.minY)…\(bb3D.maxY)] z[\(bb3D.minZ)…\(bb3D.maxZ)]")
+        logger.info("INPUT: 3D extents: dx=\(bb3D.maxX - bb3D.minX)m dy=\(bb3D.maxY - bb3D.minY)m dz=\(bb3D.maxZ - bb3D.minZ)m")
+        let naiveMm = Double(naiveMaxDist) * 1000.0
+        logger.info("INPUT: naive max pairwise 3D distance = \(naiveMm)mm")
+        logger.info("PLANE: point=(\(referencePlanePoint.x), \(referencePlanePoint.y), \(referencePlanePoint.z)) normal=(\(referencePlaneNormal.x), \(referencePlaneNormal.y), \(referencePlaneNormal.z))")
+
         // Project boundary points onto the reference plane for 2D analysis
         let (projectedPoints2D, planeU, planeV) = projectToPlane(
             boundaryPoints3D,
@@ -43,10 +54,18 @@ public enum DimensionCalculator {
             planeNormal: referencePlaneNormal
         )
 
+        // === DIAGNOSTIC: 2D projected bounding box ===
+        if let first2D = projectedPoints2D.first {
+            var minU = first2D.x, maxU = first2D.x, minV = first2D.y, maxV = first2D.y
+            for p in projectedPoints2D { minU = min(minU, p.x); maxU = max(maxU, p.x); minV = min(minV, p.y); maxV = max(maxV, p.y) }
+            logger.info("PROJ2D: u[\(minU)…\(maxU)] v[\(minV)…\(maxV)] extent: du=\(maxU-minU)m dv=\(maxV-minV)m")
+        }
+
         // Find the minimum bounding rectangle using rotating calipers
         let hull2D = ProjectionUtils.convexHull(projectedPoints2D)
+        logger.info("HULL: \(hull2D.count) points (from \(projectedPoints2D.count) projected)")
         guard hull2D.count >= 3 else {
-            // Fallback: simple max distance
+            logger.warning("HULL < 3 points — using simpleDimensions FALLBACK")
             return simpleDimensions(boundaryPoints3D)
         }
 
@@ -55,6 +74,7 @@ public enum DimensionCalculator {
         // Length = longer side, Width = shorter side
         let side1 = simd_distance(minRect.0, minRect.1)
         let side2 = simd_distance(minRect.1, minRect.2)
+        logger.info("RECT: side1=\(side1)m side2=\(side2)m angle=\(minRectAngle)rad")
 
         let lengthM: Float
         let widthM: Float
@@ -81,12 +101,53 @@ public enum DimensionCalculator {
         let (lEnd1, lEnd2) = extremePointsAlongDirection(boundaryPoints3D, direction: lengthDir3D)
         let (wEnd1, wEnd2) = extremePointsAlongDirection(boundaryPoints3D, direction: widthDir3D)
 
+        let resultLengthMm = Double(lengthM) * 1000.0
+        let resultWidthMm = Double(widthM) * 1000.0
+        let ratio = naiveMm > 0 ? resultLengthMm / naiveMm : 0
+        logger.info("RESULT: length=\(resultLengthMm)mm width=\(resultWidthMm)mm naive=\(naiveMm)mm ratio(result/naive)=\(ratio)")
+
         return DimensionResult(
-            lengthMm: Double(lengthM) * 1000.0,
-            widthMm: Double(widthM) * 1000.0,
+            lengthMm: resultLengthMm,
+            widthMm: resultWidthMm,
             lengthEndpoints: (lEnd1, lEnd2),
             widthEndpoints: (wEnd1, wEnd2)
         )
+    }
+
+    // MARK: - Diagnostics
+
+    private struct BBox3D {
+        let minX: Float, maxX: Float
+        let minY: Float, maxY: Float
+        let minZ: Float, maxZ: Float
+    }
+
+    /// Compute 3D bounding box and naive max pairwise distance.
+    private static func boundaryDiagnostics(_ pts: [SIMD3<Float>]) -> (BBox3D, Float) {
+        guard let first = pts.first else {
+            return (BBox3D(minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0), 0)
+        }
+        var minX = first.x, maxX = first.x
+        var minY = first.y, maxY = first.y
+        var minZ = first.z, maxZ = first.z
+        for p in pts {
+            minX = min(minX, p.x); maxX = max(maxX, p.x)
+            minY = min(minY, p.y); maxY = max(maxY, p.y)
+            minZ = min(minZ, p.z); maxZ = max(maxZ, p.z)
+        }
+
+        // Naive max pairwise distance (O(n²) but boundary typically < 500 pts)
+        var maxDist: Float = 0
+        let n = pts.count
+        // Sample if too many points to keep O(n²) fast
+        let stride = n > 200 ? n / 100 : 1
+        for i in Swift.stride(from: 0, to: n, by: stride) {
+            for j in Swift.stride(from: i + 1, to: n, by: stride) {
+                maxDist = max(maxDist, simd_distance(pts[i], pts[j]))
+            }
+        }
+
+        return (BBox3D(minX: minX, maxX: maxX, minY: minY, maxY: maxY, minZ: minZ, maxZ: maxZ), maxDist)
     }
 
     // MARK: - Project to Plane
@@ -255,7 +316,7 @@ public enum DimensionCalculator {
 
         return DimensionResult(
             lengthMm: Double(maxDist) * 1000.0,
-            widthMm: Double(maxPerp) * 1000.0 * 2.0,
+            widthMm: Double(maxPerp) * 1000.0,
             lengthEndpoints: (p1, p2),
             widthEndpoints: (w1, w2)
         )
