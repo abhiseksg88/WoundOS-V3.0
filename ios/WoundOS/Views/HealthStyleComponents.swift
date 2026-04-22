@@ -373,10 +373,10 @@ final class WOPushScoreCard: UIView {
 
 // MARK: - Depth Prompt View
 
-/// "Scroll down to add wound depth" prompt matching the screenshot.
+/// "Scroll down to view wound depth" prompt — depth is auto-computed from LiDAR mesh.
 final class WODepthPromptView: UIView {
 
-    init(text: String = "Scroll down to add wound depth") {
+    init(text: String = "Scroll down to view wound depth") {
         super.init(frame: .zero)
 
         let icon = UIImageView(image: UIImage(systemName: "arrow.down.circle"))

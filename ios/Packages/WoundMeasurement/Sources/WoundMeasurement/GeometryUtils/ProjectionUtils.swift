@@ -83,6 +83,48 @@ public enum ProjectionUtils {
         )
     }
 
+    // MARK: - Polygon Ordering
+
+    /// Reorder 2D points into counter-clockwise winding around their centroid.
+    /// Eliminates self-intersections caused by arbitrary point ordering
+    /// (e.g. from mask contour extraction or shuffled segmentation output).
+    public static func orderPointsCounterClockwise(_ points: [SIMD2<Float>]) -> [SIMD2<Float>] {
+        guard points.count >= 3 else { return points }
+
+        // Compute centroid
+        var cx: Float = 0, cy: Float = 0
+        for p in points {
+            cx += p.x
+            cy += p.y
+        }
+        cx /= Float(points.count)
+        cy /= Float(points.count)
+
+        // Sort by angle around centroid (counter-clockwise)
+        return points.sorted { a, b in
+            let angleA = atan2(a.y - cy, a.x - cx)
+            let angleB = atan2(b.y - cy, b.x - cx)
+            return angleA < angleB
+        }
+    }
+
+    /// Compute the signed area of a 2D polygon using the shoelace formula.
+    /// Returns the absolute area. Used as a diagnostic cross-check against
+    /// the mesh-based area computation.
+    public static func polygonArea2D(_ points: [SIMD2<Float>]) -> Float {
+        guard points.count >= 3 else { return 0 }
+        var signedArea: Float = 0
+        let n = points.count
+        for i in 0..<n {
+            let j = (i + 1) % n
+            signedArea += points[i].x * points[j].y
+            signedArea -= points[j].x * points[i].y
+        }
+        return abs(signedArea) / 2.0
+    }
+
+    // MARK: - Convex Hull
+
     /// Compute the convex hull of a set of 2D points using Graham scan.
     /// Returns points in counter-clockwise order.
     public static func convexHull(_ points: [SIMD2<Float>]) -> [SIMD2<Float>] {

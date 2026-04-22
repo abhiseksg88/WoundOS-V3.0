@@ -86,12 +86,19 @@ public final class MeshMeasurementEngine {
             )
         }
 
+        // Step 0.5: Reorder boundary points by angle around centroid to eliminate
+        //           self-intersections. Without this, a bowtie/figure-8 boundary
+        //           causes MeshClipper's winding-number containment to exclude
+        //           interior mesh triangles, producing undercounted area.
+        let orderedBoundary2D = ProjectionUtils.orderPointsCounterClockwise(boundary.points2D)
+        logger.info("Step 0.5: Ordered boundary — \(boundary.points2D.count) pts → \(orderedBoundary2D.count) pts (angular sort)")
+
         // Step 1: Rigorous mesh clipping via Sutherland-Hodgman + camera projection
         logger.info("Step 1: MeshClipper.clip — vertices=\(vertices.count) faces=\(faces.count)")
         let clippedMesh = MeshClipper.clip(
             vertices: vertices,
             faces: faces,
-            boundary2D: boundary.points2D,
+            boundary2D: orderedBoundary2D,
             intrinsics: cameraIntrinsics,
             cameraTransform: cameraTransform,
             imageWidth: imageWidth,
@@ -107,6 +114,19 @@ public final class MeshMeasurementEngine {
         // Step 2: Area from clipped triangles
         let areaCm2 = AreaCalculator.computeArea(clippedMesh: clippedMesh)
         logger.info("Step 2: Area = \(areaCm2) cm²")
+
+        // Step 2.5: Convex hull area comparison diagnostic (Task 3)
+        let hullPoints = ProjectionUtils.convexHull(orderedBoundary2D)
+        let hullArea2D = ProjectionUtils.polygonArea2D(hullPoints)
+        let sortedArea2D = ProjectionUtils.polygonArea2D(orderedBoundary2D)
+        if hullArea2D > 1e-10 {
+            let areaRatio = sortedArea2D / hullArea2D
+            if areaRatio < 0.85 {
+                logger.warning("AREA DIAGNOSTIC: sorted/hull ratio = \(areaRatio) (<0.85) — boundary may be significantly concave or still self-intersecting. sorted2D=\(Double(sortedArea2D)*10_000)cm² hull2D=\(Double(hullArea2D)*10_000)cm² mesh=\(areaCm2)cm²")
+            } else {
+                logger.info("AREA DIAGNOSTIC: sorted/hull ratio = \(areaRatio) — boundary is well-formed")
+            }
+        }
 
         // Step 3: Depth — pass the REAL camera position so plane normal orients
         //          outward (toward camera).  This is the critical bug fix.
