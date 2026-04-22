@@ -74,6 +74,28 @@ struct V5CaptureView: View {
                     .padding(.bottom, 16)
             }
             .padding(.horizontal)
+
+            // Debug: Dump Bundle button (bottom-right)
+            #if DEBUG
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button("Dump Bundle") {
+                        viewModel.dumpBundle()
+                    }
+                    .disabled(viewModel.lastCaptureBundle == nil)
+                    .font(.caption.bold())
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(8)
+                    .foregroundStyle(viewModel.lastCaptureBundle != nil ? .white : .gray)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 60)
+                }
+            }
+            #endif
         }
         .accessibilityIdentifier("v5_capture_screen")
         .alert("Capture Error", isPresented: .init(
@@ -84,5 +106,23 @@ struct V5CaptureView: View {
         } message: {
             Text(viewModel.error ?? "")
         }
+        #if DEBUG
+        .overlay(alignment: .top) {
+            if let toast = viewModel.dumpToastMessage {
+                Text(toast)
+                    .font(.caption)
+                    .padding(8)
+                    .background(.green.opacity(0.9))
+                    .cornerRadius(8)
+                    .foregroundStyle(.white)
+                    .padding(.top, 60)
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            viewModel.dumpToastMessage = nil
+                        }
+                    }
+            }
+        }
+        #endif
     }
 }

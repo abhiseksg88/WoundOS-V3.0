@@ -1,4 +1,5 @@
 import UIKit
+import ARKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -20,12 +21,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let container = DependencyContainer()
         FeatureFlags.configure(store: container.featureFlagStore)
 
-        // UI test launch arguments
+        // UI test / smoke test launch arguments
         if ProcessInfo.processInfo.arguments.contains("--enable-v5-lidar-capture") {
             FeatureFlags.setEnabled(.v5LidarCapture, true)
         }
 
         CrashLogger.shared.log("Feature flags configured, v5LidarCapture=\(FeatureFlags.isEnabled(.v5LidarCapture))", category: .app)
+
+        #if DEBUG
+        if FeatureFlags.isEnabled(.v5LidarCapture) {
+            Self.printV5LaunchBanner()
+        }
+        #endif
 
         let window = UIWindow(windowScene: windowScene)
         CrashLogger.shared.log("DependencyContainer created", category: .app)
@@ -54,4 +61,28 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidEnterBackground(_ scene: UIScene) {
         CrashLogger.shared.log("Scene entered background", category: .app)
     }
+
+    #if DEBUG
+    private static func printV5LaunchBanner() {
+        let device = UIDevice.current
+        let lidarAvailable: Bool = {
+            #if !targetEnvironment(simulator)
+            return ARWorldTrackingConfiguration.supportsFrameSemantics([.sceneDepth])
+            #else
+            return false
+            #endif
+        }()
+        let buildConfig = "DEBUG"
+        print("""
+        ================================================================
+        WoundOS V5 — LiDAR Capture Mode ENABLED
+        Device: \(device.model)
+        iOS: \(device.systemVersion)
+        LiDAR available: \(lidarAvailable ? "yes" : "no")
+        Feature flags: v5_lidar_capture_enabled=ON
+        Build: \(buildConfig)
+        ================================================================
+        """)
+    }
+    #endif
 }

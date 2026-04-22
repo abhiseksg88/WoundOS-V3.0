@@ -18,6 +18,11 @@ final class V5CaptureViewModel: ObservableObject {
     @Published var currentDistanceM: Float?
     @Published var error: String?
 
+    #if DEBUG
+    @Published var lastCaptureBundle: CaptureBundle?
+    @Published var dumpToastMessage: String?
+    #endif
+
     // MARK: - Navigation
 
     var onCaptureComplete: ((CaptureBundle) -> Void)?
@@ -121,11 +126,33 @@ final class V5CaptureViewModel: ObservableObject {
                 )
             )
 
+            #if DEBUG
+            lastCaptureBundle = bundle
+            #endif
+
             onCaptureComplete?(bundle)
         } catch {
             self.error = error.localizedDescription
         }
     }
+
+    #if DEBUG
+    func dumpBundle() {
+        guard let bundle = lastCaptureBundle else { return }
+        let output = bundle.debugDescription(verbose: true)
+        print(output)
+
+        // Write to file
+        let filename = "capture_debug_\(bundle.id.uuidString).txt"
+        if let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let fileURL = docsDir.appendingPathComponent(filename)
+            try? output.write(to: fileURL, atomically: true, encoding: .utf8)
+            dumpToastMessage = "Dumped to console + \(filename)"
+        } else {
+            dumpToastMessage = "Dumped to console (file write failed)"
+        }
+    }
+    #endif
 
     // MARK: - Bindings
 
