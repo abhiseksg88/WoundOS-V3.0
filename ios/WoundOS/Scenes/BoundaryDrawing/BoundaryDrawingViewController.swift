@@ -347,6 +347,9 @@ final class BoundaryDrawingViewController: UIViewController {
             barStack.trailingAnchor.constraint(equalTo: bottomBar.contentView.trailingAnchor, constant: -WOSpacing.lg),
             barStack.bottomAnchor.constraint(equalTo: bottomBar.contentView.safeAreaLayoutGuide.bottomAnchor, constant: -WOSpacing.md),
 
+            // Row 1: mode toggle must not be compressed
+            modeToggle.heightAnchor.constraint(equalToConstant: 32),
+
             measureButton.heightAnchor.constraint(equalToConstant: 48),
             measureButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
 
