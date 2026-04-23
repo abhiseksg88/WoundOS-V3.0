@@ -11,24 +11,13 @@ final class CoreMLBoundarySegmenterTests: XCTestCase {
         )
     }
 
-    func testInit_throwsWhenModelNotBundled() {
-        // BoundarySeg.mlpackage is not bundled in test target → init should throw
-        XCTAssertThrowsError(try CoreMLBoundarySegmenter()) { error in
-            guard let segError = error as? SegmentationError else {
-                XCTFail("Expected SegmentationError, got \(error)")
-                return
-            }
-            XCTAssertEqual(
-                segError.localizedDescription,
-                SegmentationError.modelLoadFailed.localizedDescription
-            )
-        }
+    func testInit_succeeds_whenModelBundled() {
+        // BoundarySeg.mlpackage is bundled → init should succeed
+        XCTAssertNoThrow(try CoreMLBoundarySegmenter())
     }
 
-    func testInit_withCustomThresholds_throwsWhenModelNotBundled() {
+    func testInit_withCustomThresholds_succeeds() {
         let thresholds = MaskQualityThresholds(minConfidence: 0.8)
-        XCTAssertThrowsError(try CoreMLBoundarySegmenter(qualityThresholds: thresholds)) { error in
-            XCTAssertTrue(error is SegmentationError)
-        }
+        XCTAssertNoThrow(try CoreMLBoundarySegmenter(qualityThresholds: thresholds))
     }
 }

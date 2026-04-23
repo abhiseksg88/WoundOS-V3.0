@@ -123,7 +123,11 @@ public final class CoreMLCanaryValidator {
 
     /// Load the 512×512 reference input image from the bundle.
     private func loadReferenceImage() -> CGImage? {
+        #if SWIFT_PACKAGE
+        let bundles = [Bundle.module, Bundle(for: CoreMLCanaryValidator.self), Bundle.main]
+        #else
         let bundles = [Bundle(for: CoreMLCanaryValidator.self), Bundle.main]
+        #endif
 
         for bundle in bundles {
             if let url = bundle.url(
@@ -152,24 +156,60 @@ public final class CoreMLCanaryValidator {
     }
 
     /// Load the reference binary mask from the bundle.
-    /// Expected format: flat 512×512 UInt8 array (0 = background, 255 = foreground).
+    /// Accepts an 8-bit grayscale PNG (0 = background, 255 = foreground).
+    /// Renders the PNG into a grayscale bitmap and returns the flat pixel array.
     private func loadReferenceMask() -> [UInt8]? {
+        #if SWIFT_PACKAGE
+        let bundles = [Bundle.module, Bundle(for: CoreMLCanaryValidator.self), Bundle.main]
+        #else
         let bundles = [Bundle(for: CoreMLCanaryValidator.self), Bundle.main]
-
-        let expectedSize = Self.maskSize * Self.maskSize
+        #endif
 
         for bundle in bundles {
             if let url = bundle.url(
                 forResource: "boundaryseg_v1_reference_mask",
-                withExtension: "bin",
+                withExtension: "png",
                 subdirectory: "CanaryReferences"
             ) {
-                if let data = try? Data(contentsOf: url), data.count == expectedSize {
-                    return [UInt8](data)
-                }
+                return loadGrayscalePNG(url: url, expectedSize: Self.maskSize)
             }
         }
         return nil
+    }
+
+    /// Decode a grayscale PNG into a flat UInt8 array of the expected dimensions.
+    private func loadGrayscalePNG(url: URL, expectedSize: Int) -> [UInt8]? {
+        #if canImport(UIKit)
+        guard let uiImage = UIImage(contentsOfFile: url.path),
+              let cgImage = uiImage.cgImage else { return nil }
+        #else
+        guard let dataProvider = CGDataProvider(url: url as CFURL),
+              let cgImage = CGImage(
+                  pngDataProviderSource: dataProvider,
+                  decode: nil,
+                  shouldInterpolate: false,
+                  intent: .defaultIntent
+              ) else { return nil }
+        #endif
+
+        let width = expectedSize
+        let height = expectedSize
+
+        // Render into a grayscale bitmap context
+        let colorSpace = CGColorSpaceCreateDeviceGray()
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return pixels
     }
 
     // MARK: - Mask Reading

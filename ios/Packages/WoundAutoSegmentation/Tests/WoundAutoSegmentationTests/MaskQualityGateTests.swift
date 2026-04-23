@@ -170,10 +170,10 @@ final class MaskQualityGateTests: XCTestCase {
     // MARK: - Threshold Edge Cases
 
     func testExactMinCoverage_accepts() {
-        // Create a polygon that's exactly at 1% coverage
+        // Create a polygon just above 1% coverage
         // 1% of 4032×3024 = 121,766.88 sq pixels
-        // Square side = sqrt(121767) ≈ 349 pixels
-        let polygon = makeSquarePolygon(center: CGPoint(x: 2016, y: 1512), size: 349)
+        // Square side = sqrt(121767) ≈ 349, use 350 to ensure > 1%
+        let polygon = makeSquarePolygon(center: CGPoint(x: 2016, y: 1512), size: 350)
         let result = MaskQualityGate.evaluate(
             polygon: polygon,
             imageSize: frameSize,

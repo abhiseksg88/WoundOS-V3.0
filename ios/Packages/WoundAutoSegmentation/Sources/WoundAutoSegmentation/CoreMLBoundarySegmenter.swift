@@ -63,7 +63,11 @@ public final class CoreMLBoundarySegmenter: WoundSegmenter {
     /// Checks the class bundle (SPM package bundle) and main app bundle.
     private static func findModelURL() -> URL? {
         let extensions = ["mlmodelc", "mlpackage"]
+        #if SWIFT_PACKAGE
+        let bundles = [Bundle.module, Bundle(for: CoreMLBoundarySegmenter.self), Bundle.main]
+        #else
         let bundles = [Bundle(for: CoreMLBoundarySegmenter.self), Bundle.main]
+        #endif
 
         for bundle in bundles {
             for ext in extensions {

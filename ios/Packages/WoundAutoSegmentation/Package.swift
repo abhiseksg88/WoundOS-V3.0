@@ -16,13 +16,11 @@ let package = Package(
             dependencies: [
                 .product(name: "WoundCore", package: "WoundCore"),
             ],
-            path: "Sources/WoundAutoSegmentation"
-            // Uncomment after placing CoreML models in Resources/:
-            // resources: [
-            //     .copy("Resources/FUSegNet.mlpackage"),
-            //     .copy("Resources/BoundarySeg.mlpackage"),
-            //     .copy("Resources/CanaryReferences"),
-            // ]
+            path: "Sources/WoundAutoSegmentation",
+            resources: [
+                .copy("Resources/BoundarySeg.mlpackage"),
+                .copy("Resources/CanaryReferences"),
+            ]
         ),
         .testTarget(
             name: "WoundAutoSegmentationTests",
