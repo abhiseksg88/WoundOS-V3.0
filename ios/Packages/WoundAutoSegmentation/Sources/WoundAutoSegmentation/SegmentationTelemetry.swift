@@ -20,6 +20,12 @@ public struct SegmentationTelemetryRecord: Codable, Sendable {
     public let userAction: String?
     public let onDeviceFlagState: Bool
 
+    // Phase 3a.2 — ChainedSegmenter observability
+    public let canaryIoU: Float?
+    public let canaryPassed: Bool?
+    public let fallbackReason: String?
+    public let chainedSegmenterUsed: Bool
+
     public init(
         captureUUID: String = UUID().uuidString,
         timestamp: Date = Date(),
@@ -32,7 +38,11 @@ public struct SegmentationTelemetryRecord: Codable, Sendable {
         qualityResult: String,
         qualityDetail: String? = nil,
         userAction: String? = nil,
-        onDeviceFlagState: Bool
+        onDeviceFlagState: Bool,
+        canaryIoU: Float? = nil,
+        canaryPassed: Bool? = nil,
+        fallbackReason: String? = nil,
+        chainedSegmenterUsed: Bool = false
     ) {
         self.captureUUID = captureUUID
         self.timestamp = timestamp
@@ -46,12 +56,20 @@ public struct SegmentationTelemetryRecord: Codable, Sendable {
         self.qualityDetail = qualityDetail
         self.userAction = userAction
         self.onDeviceFlagState = onDeviceFlagState
+        self.canaryIoU = canaryIoU
+        self.canaryPassed = canaryPassed
+        self.fallbackReason = fallbackReason
+        self.chainedSegmenterUsed = chainedSegmenterUsed
     }
 
     /// Build a telemetry record from a SegmentationResult.
     public static func from(
         result: SegmentationResult,
         onDeviceFlagState: Bool,
+        canaryIoU: Float? = nil,
+        canaryPassed: Bool? = nil,
+        fallbackReason: String? = nil,
+        chainedSegmenterUsed: Bool = false,
         captureUUID: String = UUID().uuidString
     ) -> SegmentationTelemetryRecord {
         let polyArea = abs(shoelaceArea(result.polygonImageSpace))
@@ -84,7 +102,11 @@ public struct SegmentationTelemetryRecord: Codable, Sendable {
             rawComponentCount: result.connectedComponents,
             qualityResult: qualityStr,
             qualityDetail: detailStr,
-            onDeviceFlagState: onDeviceFlagState
+            onDeviceFlagState: onDeviceFlagState,
+            canaryIoU: canaryIoU,
+            canaryPassed: canaryPassed,
+            fallbackReason: fallbackReason,
+            chainedSegmenterUsed: chainedSegmenterUsed
         )
     }
 

@@ -340,10 +340,19 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 ])
 
                 // 3. Build boundary model.
-                // An auto-seeded boundary keeps its `.autoVision` source even
-                // if the nurse then hand-edited vertices — this matches the
-                // audit-trail design (all AI-assisted boundaries are flagged).
-                let source: BoundarySource = boundaryWasAutoSeeded ? .autoVision : .nurseDrawn
+                // An auto-seeded boundary keeps its AI source even if the nurse
+                // then hand-edited vertices — audit trail separates AI-assisted
+                // from purely manual boundaries.
+                let source: BoundarySource
+                if boundaryWasAutoSeeded {
+                    if segmenterModelId == CoreMLBoundarySegmenter.modelIdentifier {
+                        source = .autoCoreML
+                    } else {
+                        source = .autoVision
+                    }
+                } else {
+                    source = .nurseDrawn
+                }
                 CrashLogger.shared.log("Step 3: Building WoundBoundary (source=\(source), mode=\(drawingMode))", category: .boundary)
                 let boundary = WoundBoundary(
                     boundaryType: drawingMode == .freeform ? .freeform : .polygon,

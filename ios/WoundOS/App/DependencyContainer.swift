@@ -48,21 +48,14 @@ final class DependencyContainer {
 
     // MARK: - Auto-Segmentation
 
-    /// Primary segmenter: server-side SAM 2 via WoundOS backend.
+    /// Segmenter selection: ChainedSegmenter when `.onDeviceSegmentation` is ON
+    /// (CoreML primary → Server fallback), or plain ServerSegmenter when OFF.
     /// No fallback to VisionForegroundSegmenter — it caused false-positive
-    /// measurements on non-wounds (hairbrush, credit card, bowl) during
-    /// Phase 2 adversarial testing. When server is unreachable, the error
-    /// bubbles up and the UI shows "Draw Manually".
+    /// measurements on non-wounds during Phase 2 adversarial testing.
     lazy var autoSegmenter: WoundSegmenter? = {
         let preferOnDevice = FeatureFlags.isEnabled(.onDeviceSegmentation)
-        CrashLogger.shared.log(
-            "Segmenter selection: preferOnDevice=\(preferOnDevice), effectiveSegmenter=ServerSegmenter",
-            category: .segmentation
-        )
 
-        // Phase 3a.1: flag is read and logged but behavior is identical
-        // since FUSegNet is not yet wired. Phase 3a.2 will switch primary
-        // between Server and FUSegNet based on this flag.
+        // Server segmenter — always available as fallback or sole segmenter
         let client = self.apiClient
         let serverSegmenter = ServerSegmenter(
             segmentRequest: { jpegData, tapPoint, imageWidth, imageHeight in
@@ -79,7 +72,47 @@ final class DependencyContainer {
                 )
             }
         )
-        return serverSegmenter
+
+        guard preferOnDevice else {
+            CrashLogger.shared.log(
+                "Segmenter: onDeviceSegmentation=OFF → ServerSegmenter only",
+                category: .segmentation
+            )
+            return serverSegmenter
+        }
+
+        // Try to load CoreML model — gracefully nil if model not bundled
+        let coreMLSegmenter: CoreMLBoundarySegmenter?
+        do {
+            coreMLSegmenter = try CoreMLBoundarySegmenter()
+            CrashLogger.shared.log(
+                "CoreMLBoundarySegmenter loaded successfully",
+                category: .segmentation
+            )
+        } catch {
+            CrashLogger.shared.log(
+                "CoreMLBoundarySegmenter failed to load: \(error) → server fallback",
+                category: .segmentation,
+                level: .warning
+            )
+            coreMLSegmenter = nil
+        }
+
+        let canaryValidator = coreMLSegmenter.map { CoreMLCanaryValidator(segmenter: $0) }
+
+        let chained = ChainedSegmenter(
+            primary: coreMLSegmenter,
+            fallback: serverSegmenter,
+            canaryValidator: canaryValidator
+        )
+
+        CrashLogger.shared.log(
+            "Segmenter: onDeviceSegmentation=ON → ChainedSegmenter "
+            + "(primary=\(coreMLSegmenter != nil ? "CoreML" : "nil"), fallback=Server)",
+            category: .segmentation
+        )
+
+        return chained
     }()
 
     /// Mask refiner — V6 extension point. For V5 this is a no-op
