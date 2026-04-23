@@ -49,6 +49,27 @@ public enum BlockingReason: Equatable {
         }
     }
 
+    /// Production-facing guidance text without raw metrics.
+    /// Used when DeveloperMode is OFF for a clean clinical experience.
+    public var cleanDisplayMessage: String {
+        switch self {
+        case .trackingNotNormal:
+            return "Initializing — hold steady"
+        case .trackingNotStable:
+            return "Stabilizing..."
+        case .tooFar:
+            return "Move closer"
+        case .tooClose:
+            return "Pull back slightly"
+        case .noDistance:
+            return "Point camera at wound"
+        case .insufficientMesh:
+            return "Scanning surface..."
+        case .excessiveMotion:
+            return "Hold device still"
+        }
+    }
+
     public var iconName: String {
         switch self {
         case .trackingNotNormal, .trackingNotStable: return "arkit"

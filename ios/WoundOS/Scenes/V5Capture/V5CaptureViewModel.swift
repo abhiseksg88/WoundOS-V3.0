@@ -1,8 +1,18 @@
 import Foundation
 import Combine
 import ARKit
+import UIKit
 import WoundCore
 import WoundCapture
+
+// MARK: - Quality Level
+
+/// Visual state for the corner quality indicator.
+enum CaptureQualityLevel: Equatable {
+    case gray   // Initializing (tracking not normal, no distance)
+    case amber  // Adjust needed (too far, too close, stabilizing, etc.)
+    case green  // Ready to capture
+}
 
 // MARK: - V5 Capture View Model
 
@@ -22,6 +32,14 @@ final class V5CaptureViewModel: ObservableObject {
     @Published var lastCaptureBundle: CaptureBundle?
     @Published var dumpToastMessage: String?
 
+    // A1/A5: Heatmap reveal (long-press)
+    @Published var isHeatmapRevealed = false
+
+    // A2: Quality indicator
+    @Published var qualityLevel: CaptureQualityLevel = .gray
+    @Published var showQualityTooltip = false
+    @Published var qualityTooltipText = ""
+
     // MARK: - Navigation
 
     var onCaptureComplete: ((CaptureBundle) -> Void)?
@@ -31,6 +49,7 @@ final class V5CaptureViewModel: ObservableObject {
     let captureSession: LiDARCaptureSession
     private var cancellables = Set<AnyCancellable>()
     private var sessionStartTime: Date?
+    private var previousQualityLevel: CaptureQualityLevel = .gray
 
     // MARK: - Computed
 
@@ -43,12 +62,12 @@ final class V5CaptureViewModel: ObservableObject {
     var guidanceText: String {
         switch readiness {
         case .ready:
-            if let d = currentDistanceM {
+            if DeveloperMode.isEnabled, let d = currentDistanceM {
                 return String(format: "Ready — %.0f cm", d * 100)
             }
-            return "Ready"
+            return "Ready to capture"
         case .notReady(let reason):
-            return reason.displayMessage
+            return DeveloperMode.isEnabled ? reason.displayMessage : reason.cleanDisplayMessage
         }
     }
 
@@ -58,6 +77,25 @@ final class V5CaptureViewModel: ObservableObject {
             return "checkmark.circle.fill"
         case .notReady(let reason):
             return reason.iconName
+        }
+    }
+
+    /// Dynamic hint shown above capture button. Empty when ready (no hint needed).
+    var distanceHintText: String {
+        switch readiness {
+        case .ready:
+            return ""
+        case .notReady(let reason):
+            switch reason {
+            case .tooClose:
+                return "Move back slightly"
+            case .tooFar(let d):
+                return d > 0.50 ? "Much too far — move closer" : "Move closer for best capture"
+            case .noDistance:
+                return "Hold 20–35 cm from wound"
+            default:
+                return ""
+            }
         }
     }
 
@@ -169,6 +207,47 @@ final class V5CaptureViewModel: ObservableObject {
         captureSession.confidencePublisher
             .throttle(for: .milliseconds(200), scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] summary in self?.confidenceSummary = summary }
+            .store(in: &cancellables)
+
+        // A2/A4: Quality level derivation with debounce + haptic
+        captureSession.qualityMonitor.readinessPublisher
+            .map { readiness -> CaptureQualityLevel in
+                switch readiness {
+                case .ready:
+                    return .green
+                case .notReady(let reason):
+                    switch reason {
+                    case .trackingNotNormal, .noDistance:
+                        return .gray
+                    default:
+                        return .amber
+                    }
+                }
+            }
+            .removeDuplicates()
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] level in
+                guard let self else { return }
+                // A4: Haptic on transition to green
+                if level == .green && self.previousQualityLevel != .green {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+                self.previousQualityLevel = self.qualityLevel
+                self.qualityLevel = level
+
+                // Update tooltip text
+                switch level {
+                case .gray:
+                    self.qualityTooltipText = self.readiness == .notReady(reason: .noDistance)
+                        ? "Point camera at wound" : "LiDAR warming up..."
+                case .amber:
+                    if case .notReady(let reason) = self.readiness {
+                        self.qualityTooltipText = reason.cleanDisplayMessage
+                    }
+                case .green:
+                    self.qualityTooltipText = "Ready to capture"
+                }
+            }
             .store(in: &cancellables)
     }
 }

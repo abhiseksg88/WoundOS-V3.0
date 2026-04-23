@@ -108,6 +108,8 @@ final class BoundaryDrawingViewController: UIViewController {
         let button = UIButton(configuration: config)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(confirmTapped), for: .touchUpInside)
+        button.accessibilityLabel = "Measure wound"
+        button.accessibilityHint = "Computes wound measurements from the drawn boundary"
         return button
     }()
 
@@ -268,12 +270,27 @@ final class BoundaryDrawingViewController: UIViewController {
 
         instructionCard.contentView.addSubview(instructionLabel)
 
-        // Bottom bar content
-        let barStack = UIStackView(arrangedSubviews: [undoButton, clearButton, modeToggle, measureButton])
-        barStack.axis = .horizontal
-        barStack.distribution = .fill
+        // Bottom bar content — two-row layout
+        // Row 1: Mode toggle (full width)
+        let row1 = UIStackView(arrangedSubviews: [modeToggle])
+        row1.axis = .horizontal
+        row1.distribution = .fill
+
+        // Row 2: [undo, clear] — spacer — [Measure]
+        let leftGroup = UIStackView(arrangedSubviews: [undoButton, clearButton])
+        leftGroup.axis = .horizontal
+        leftGroup.spacing = WOSpacing.md
+
+        let spacer = UIView()
+        let row2 = UIStackView(arrangedSubviews: [leftGroup, spacer, measureButton])
+        row2.axis = .horizontal
+        row2.distribution = .fill
+        row2.alignment = .center
+
+        let barStack = UIStackView(arrangedSubviews: [row1, row2])
+        barStack.axis = .vertical
         barStack.spacing = WOSpacing.md
-        barStack.alignment = .center
+        barStack.alignment = .fill
         barStack.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.contentView.addSubview(barStack)
 
@@ -330,7 +347,14 @@ final class BoundaryDrawingViewController: UIViewController {
             barStack.trailingAnchor.constraint(equalTo: bottomBar.contentView.trailingAnchor, constant: -WOSpacing.lg),
             barStack.bottomAnchor.constraint(equalTo: bottomBar.contentView.safeAreaLayoutGuide.bottomAnchor, constant: -WOSpacing.md),
 
-            measureButton.heightAnchor.constraint(equalToConstant: 36),
+            measureButton.heightAnchor.constraint(equalToConstant: 48),
+            measureButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
+
+            // 44×44 minimum touch targets
+            undoButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            undoButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            clearButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            clearButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
 
             // Processing overlay
             processingOverlay.topAnchor.constraint(equalTo: view.topAnchor),
@@ -345,8 +369,10 @@ final class BoundaryDrawingViewController: UIViewController {
         config.image = UIImage(systemName: icon)
         config.preferredSymbolConfigurationForImage = .init(pointSize: 15, weight: .medium)
         config.baseForegroundColor = .label
+        config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10)
         let button = UIButton(configuration: config)
         button.addTarget(self, action: action, for: .touchUpInside)
+        button.accessibilityLabel = title
         return button
     }
 

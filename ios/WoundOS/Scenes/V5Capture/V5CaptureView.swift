@@ -16,6 +16,15 @@ struct V5CaptureView: View {
             #if !targetEnvironment(simulator)
             ARViewRepresentable(session: viewModel.arSession)
                 .ignoresSafeArea()
+                .onLongPressGesture(minimumDuration: 0.5, pressing: { isPressing in
+                    if isPressing {
+                        viewModel.isHeatmapRevealed = true
+                    } else {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            viewModel.isHeatmapRevealed = false
+                        }
+                    }
+                }, perform: {})
             #else
             Color.black
                 .ignoresSafeArea()
@@ -26,12 +35,14 @@ struct V5CaptureView: View {
                 }
             #endif
 
-            // Confidence heatmap overlay (translucent)
-            if let confidence = viewModel.confidenceSummary {
+            // Confidence heatmap overlay (dev mode or hold-to-reveal)
+            if let confidence = viewModel.confidenceSummary,
+               (DeveloperMode.isEnabled || viewModel.isHeatmapRevealed) {
                 ConfidenceHeatmapOverlay(summary: confidence)
-                    .opacity(0.25)
+                    .opacity(viewModel.isHeatmapRevealed ? 0.50 : 0.25)
                     .allowsHitTesting(false)
                     .ignoresSafeArea()
+                    .animation(.easeOut(duration: 0.3), value: viewModel.isHeatmapRevealed)
             }
 
             // Tracking overlay (blocks when tracking is limited)
@@ -56,7 +67,8 @@ struct V5CaptureView: View {
                 // Center: Distance ring
                 DistanceRingView(
                     distanceM: viewModel.currentDistanceM,
-                    optimalRange: 0.20...0.35
+                    optimalRange: 0.20...0.35,
+                    showNumericLabel: DeveloperMode.isEnabled
                 )
 
                 Spacer()
@@ -68,30 +80,51 @@ struct V5CaptureView: View {
                 )
                 .padding(.bottom, 8)
 
-                Text("Hold 20–35 cm from wound")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(.bottom, 16)
+                if !viewModel.distanceHintText.isEmpty {
+                    Text(viewModel.distanceHintText)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
+                        .animation(.easeInOut(duration: 0.2), value: viewModel.distanceHintText)
+                }
+                Spacer().frame(height: 16)
             }
             .padding(.horizontal)
 
-            // Dump Bundle button (bottom-right) — GATE 2 smoke test
+            // Quality indicator (top-right)
             VStack {
-                Spacer()
                 HStack {
                     Spacer()
-                    Button("Dump Bundle") {
-                        viewModel.dumpBundle()
-                    }
-                    .disabled(viewModel.lastCaptureBundle == nil)
-                    .font(.caption.bold())
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(8)
-                    .foregroundStyle(viewModel.lastCaptureBundle != nil ? .white : .gray)
+                    CaptureQualityIndicatorView(
+                        quality: viewModel.qualityLevel,
+                        tooltipText: viewModel.qualityTooltipText,
+                        showTooltip: $viewModel.showQualityTooltip
+                    )
+                    .padding(.top, 12)
                     .padding(.trailing, 16)
-                    .padding(.bottom, 60)
+                }
+                Spacer()
+            }
+
+            // Dump Bundle button (bottom-right) — dev only
+            if DeveloperMode.isEnabled {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button("Dump Bundle") {
+                            viewModel.dumpBundle()
+                        }
+                        .disabled(viewModel.lastCaptureBundle == nil)
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(8)
+                        .foregroundStyle(viewModel.lastCaptureBundle != nil ? .white : .gray)
+                        .padding(.trailing, 16)
+                        .padding(.bottom, 60)
+                    }
                 }
             }
         }
@@ -105,7 +138,7 @@ struct V5CaptureView: View {
             Text(viewModel.error ?? "")
         }
         .overlay(alignment: .top) {
-            if let toast = viewModel.dumpToastMessage {
+            if DeveloperMode.isEnabled, let toast = viewModel.dumpToastMessage {
                 Text(toast)
                     .font(.caption)
                     .padding(8)

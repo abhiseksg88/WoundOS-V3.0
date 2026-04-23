@@ -7,6 +7,7 @@ import SwiftUI
 struct DistanceRingView: View {
     let distanceM: Float?
     let optimalRange: ClosedRange<Float>
+    var showNumericLabel: Bool = true
 
     private var fraction: CGFloat {
         guard let d = distanceM else { return 0 }
@@ -42,16 +43,18 @@ struct DistanceRingView: View {
                 .rotationEffect(.degrees(-90))
                 .animation(.easeInOut(duration: 0.2), value: fraction)
 
-            // Center distance label
-            VStack(spacing: 2) {
-                Text(distanceText)
-                    .font(.system(size: 36, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                Text("cm")
-                    .font(.caption)
-                    .fontWeight(.medium)
+            // Center distance label (dev mode only)
+            if showNumericLabel {
+                VStack(spacing: 2) {
+                    Text(distanceText)
+                        .font(.system(size: 36, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                    Text("cm")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundStyle(.white)
             }
-            .foregroundStyle(.white)
         }
         .accessibilityIdentifier("distance_ring")
     }
