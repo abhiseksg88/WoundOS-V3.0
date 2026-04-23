@@ -117,6 +117,14 @@ final class V5CaptureViewModel: ObservableObject {
         }
     }
 
+    func resumeSession() {
+        do {
+            try captureSession.resumeSession()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     func pauseSession() {
         captureSession.pauseSession()
     }

@@ -20,6 +20,11 @@ public protocol CaptureProviderProtocol: AnyObject {
     /// Pause the AR session
     func pauseSession()
 
+    /// Resume the AR session after a pause without resetting tracking.
+    /// Default implementation falls back to startSession() for providers
+    /// that don't distinguish between start and resume.
+    func resumeSession() throws
+
     /// Freeze the current ARKit frame and produce a capture snapshot.
     /// All spatial data (RGB, depth, mesh, camera pose) is locked
     /// at this instant.
@@ -27,6 +32,14 @@ public protocol CaptureProviderProtocol: AnyObject {
 
     /// Register a callback for tracking state changes
     var onTrackingStateChanged: ((TrackingState) -> Void)? { get set }
+}
+
+// MARK: - Default Resume (falls back to start)
+
+public extension CaptureProviderProtocol {
+    func resumeSession() throws {
+        try startSession()
+    }
 }
 
 // MARK: - Capture Snapshot

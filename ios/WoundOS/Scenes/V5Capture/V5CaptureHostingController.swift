@@ -11,6 +11,7 @@ final class V5CaptureHostingController: UIHostingController<V5CaptureView> {
 
     private let viewModel: V5CaptureViewModel
     private var hasCheckedLiDAR = false
+    private var hasStartedSession = false
 
     init(viewModel: V5CaptureViewModel) {
         self.viewModel = viewModel
@@ -40,8 +41,13 @@ final class V5CaptureHostingController: UIHostingController<V5CaptureView> {
             #endif
         }
 
-        // Resume AR session every time this screen appears
-        viewModel.startSession()
+        // First appearance: full start. Subsequent: resume without reset.
+        if hasStartedSession {
+            viewModel.resumeSession()
+        } else {
+            hasStartedSession = true
+            viewModel.startSession()
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {

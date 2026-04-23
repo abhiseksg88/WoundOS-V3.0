@@ -120,6 +120,36 @@ public final class LiDARCaptureSession: NSObject, CaptureProviderProtocol {
         qualityMonitor.reset()
     }
 
+    /// Resume the AR session after a pause without resetting tracking.
+    /// Uses `session.run(config)` with no options so the existing world map
+    /// and anchors are preserved and the camera feed restarts immediately.
+    public func resumeSession() throws {
+        logger.info("V5 resumeSession() — resuming paused session")
+        guard isLiDARAvailable else {
+            throw CaptureError.lidarNotAvailable
+        }
+
+        #if !targetEnvironment(simulator)
+        let config = ARWorldTrackingConfiguration()
+        config.sceneReconstruction = .mesh
+        config.frameSemantics = [.smoothedSceneDepth]
+        config.environmentTexturing = .automatic
+
+        if configuration.preferredImageResolution == .high,
+           let hiResFormat = ARWorldTrackingConfiguration.supportedVideoFormats
+            .filter({ $0.captureDevicePosition == .back })
+            .max(by: { $0.imageResolution.width < $1.imageResolution.width }) {
+            config.videoFormat = hiResFormat
+        }
+
+        // No reset options — preserves world map, just restarts frame delivery
+        session.run(config)
+        #endif
+
+        sessionStartTime = Date()
+        currentFrame = nil
+    }
+
     public func pauseSession() {
         #if !targetEnvironment(simulator)
         session.pause()
