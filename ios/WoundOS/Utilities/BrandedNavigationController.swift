@@ -28,13 +28,15 @@ final class BrandedNavigationController: UINavigationController {
         container.spacing = 8
         container.alignment = .center
 
-        // Logo — prominent size like ServiceNow/Salesforce nav branding
+        // Logo — height matches the title label font size, width scales proportionally
         let imageView = UIImageView(image: UIImage(named: "WoundOSLogo")?.withRenderingMode(.alwaysOriginal))
         imageView.contentMode = .scaleAspectFit
         imageView.translatesAutoresizingMaskIntoConstraints = false
+        let logoHeight: CGFloat = 17
+        let logoAspect: CGFloat = 440.0 / 138.0
         NSLayoutConstraint.activate([
-            imageView.widthAnchor.constraint(equalToConstant: 36),
-            imageView.heightAnchor.constraint(equalToConstant: 36),
+            imageView.heightAnchor.constraint(equalToConstant: logoHeight),
+            imageView.widthAnchor.constraint(equalToConstant: logoHeight * logoAspect),
         ])
 
         let label = UILabel()
