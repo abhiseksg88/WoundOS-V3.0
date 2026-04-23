@@ -27,6 +27,7 @@
 		24901A042F99C694006CFC7B /* SegmenterDebugViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24901A032F99C694006CFC7B /* SegmenterDebugViewController.swift */; };
 		24901A062F99CE82006CFC7B /* DeveloperMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24901A052F99CE82006CFC7B /* DeveloperMode.swift */; };
 		24901A082F99E3BD006CFC7B /* CaptureQualityIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24901A072F99E3BD006CFC7B /* CaptureQualityIndicatorView.swift */; };
+		24901A0A2F99E7CB006CFC7B /* BrandedNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24901A092F99E7CB006CFC7B /* BrandedNavigationController.swift */; };
 		249403B82F972F9F000FB77F /* CrashLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249403B72F972F9F000FB77F /* CrashLogger.swift */; };
 		BBBB00000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000001 /* AppDelegate.swift */; };
 		BBBB00000000000000000002 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000002 /* DependencyContainer.swift */; };
@@ -77,6 +78,7 @@
 		24901A032F99C694006CFC7B /* SegmenterDebugViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmenterDebugViewController.swift; sourceTree = "<group>"; };
 		24901A052F99CE82006CFC7B /* DeveloperMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperMode.swift; sourceTree = "<group>"; };
 		24901A072F99E3BD006CFC7B /* CaptureQualityIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureQualityIndicatorView.swift; sourceTree = "<group>"; };
+		24901A092F99E7CB006CFC7B /* BrandedNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandedNavigationController.swift; sourceTree = "<group>"; };
 		249403B72F972F9F000FB77F /* CrashLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashLogger.swift; sourceTree = "<group>"; };
 		AAAA00000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AAAA00000000000000000002 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 				249019FE2F99C5F3006CFC7B /* SegmentationErrorMessages.swift */,
 				24901A002F99C61B006CFC7B /* WoundTypeOverride.swift */,
 				24901A052F99CE82006CFC7B /* DeveloperMode.swift */,
+				24901A092F99E7CB006CFC7B /* BrandedNavigationController.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -406,6 +409,7 @@
 				249019EE2F987A11006CFC7B /* TrackingIndicatorView.swift in Sources */,
 				249019E82F9879F7006CFC7B /* V5CaptureView.swift in Sources */,
 				249019F62F987A22006CFC7B /* V5CaptureHostingController.swift in Sources */,
+				24901A0A2F99E7CB006CFC7B /* BrandedNavigationController.swift in Sources */,
 				BBBB00000000000000000013 /* MeasurementResultViewModel.swift in Sources */,
 				249019F92F987A42006CFC7B /* CaptureBundleEntity.swift in Sources */,
 				BBBB00000000000000000014 /* ScanDetailViewController.swift in Sources */,

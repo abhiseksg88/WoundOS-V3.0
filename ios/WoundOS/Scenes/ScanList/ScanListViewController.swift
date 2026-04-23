@@ -105,8 +105,7 @@ final class ScanListViewController: UIViewController {
 
     private func setupUI() {
         view.backgroundColor = WOColors.screenBackground
-        navigationController?.navigationBar.prefersLargeTitles = true
-        navigationItem.largeTitleDisplayMode = .always
+        navigationController?.navigationBar.prefersLargeTitles = false
 
         // "Share Logs" button for testers to export crash logs
         navigationItem.rightBarButtonItem = UIBarButtonItem(

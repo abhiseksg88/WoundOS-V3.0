@@ -19,7 +19,7 @@ final class AppCoordinator: Coordinator {
         let tabBarController = UITabBarController()
 
         // Tab 1: Scan List (patient scan history)
-        let scanListNav = UINavigationController()
+        let scanListNav = BrandedNavigationController()
         scanListNav.tabBarItem = UITabBarItem(
             title: "Scans",
             image: UIImage(systemName: "list.bullet.rectangle"),
@@ -33,7 +33,7 @@ final class AppCoordinator: Coordinator {
         scanListCoordinator.start()
 
         // Tab 2: New Capture
-        let captureNav = UINavigationController()
+        let captureNav = BrandedNavigationController()
         captureNav.tabBarItem = UITabBarItem(
             title: "Capture",
             image: UIImage(systemName: "camera.viewfinder"),
