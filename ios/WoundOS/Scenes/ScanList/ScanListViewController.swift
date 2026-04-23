@@ -92,11 +92,13 @@ final class ScanListViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         bindViewModel()
+        setupDeveloperModeGesture()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         viewModel.loadScans()
+        updateDebugButton()
     }
 
     // MARK: - UI Setup
@@ -115,15 +117,7 @@ final class ScanListViewController: UIViewController {
         )
         navigationItem.rightBarButtonItem?.accessibilityLabel = "Share Debug Logs"
 
-        #if DEBUG
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "gearshape"),
-            style: .plain,
-            target: self,
-            action: #selector(debugTapped)
-        )
-        navigationItem.leftBarButtonItem?.accessibilityLabel = "Segmenter Debug"
-        #endif
+        updateDebugButton()
 
         view.addSubview(tableView)
         view.addSubview(emptyStateView)
@@ -158,14 +152,49 @@ final class ScanListViewController: UIViewController {
         viewModel.loadScans()
     }
 
-    #if DEBUG
+    /// Show/hide gear icon based on DeveloperMode state.
+    private func updateDebugButton() {
+        if DeveloperMode.isEnabled {
+            navigationItem.leftBarButtonItem = UIBarButtonItem(
+                image: UIImage(systemName: "gearshape"),
+                style: .plain,
+                target: self,
+                action: #selector(debugTapped)
+            )
+            navigationItem.leftBarButtonItem?.accessibilityLabel = "Segmenter Debug"
+        } else {
+            navigationItem.leftBarButtonItem = nil
+        }
+    }
+
+    /// 5-tap on nav bar activates Developer Mode. No visible UI affordance.
+    private func setupDeveloperModeGesture() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(developerModeTapped))
+        tap.numberOfTapsRequired = 5
+        navigationController?.navigationBar.addGestureRecognizer(tap)
+    }
+
+    @objc private func developerModeTapped() {
+        DeveloperMode.toggle()
+        updateDebugButton()
+        let state = DeveloperMode.isEnabled ? "ON" : "OFF"
+        let alert = UIAlertController(
+            title: "Developer Mode: \(state)",
+            message: DeveloperMode.isEnabled
+                ? "Gear icon added. Restart capture flow for full effect."
+                : "Developer tools hidden.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+
     @objc private func debugTapped() {
         guard let deps = dependencies else { return }
         let debugVC = SegmenterDebugViewController(dependencies: deps)
         let nav = UINavigationController(rootViewController: debugVC)
         present(nav, animated: true)
     }
-    #endif
 
     @objc private func shareLogsTapped() {
         CrashLogger.shared.log("User tapped Share Logs", category: .app)

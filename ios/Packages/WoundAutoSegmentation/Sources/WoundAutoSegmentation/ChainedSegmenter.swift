@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import os
 
 // MARK: - Fallback Reason
 
@@ -30,6 +31,11 @@ public enum SegmenterFallbackReason: String, Sendable {
 /// indicates which backend was used (each segmenter sets its own identifier).
 public final class ChainedSegmenter: WoundSegmenter {
 
+    private static let logger = Logger(
+        subsystem: "com.woundos.segmentation",
+        category: "ChainedSegmenter"
+    )
+
     private let primary: WoundSegmenter?
     private let fallback: WoundSegmenter
     private let canaryValidator: CoreMLCanaryValidator?
@@ -58,33 +64,43 @@ public final class ChainedSegmenter: WoundSegmenter {
         image: CGImage,
         tapPoint: CGPoint
     ) async throws -> SegmentationResult {
+        let log = Self.logger
+
+        log.info("segment: entry, has_primary=\(self.primary != nil), canary_state=\(String(describing: self.getCanaryState()))")
 
         // 1. No primary segmenter → straight to fallback
         guard let primary else {
             lastFallbackReason = .coremlLoadFailed
+            log.warning("segment: no primary → fallback (coreml_load_failed)")
             return try await fallback.segment(image: image, tapPoint: tapPoint)
         }
 
         // 2. Run canary on first call (lazy, one-shot)
         let canaryState = getCanaryState()
         if canaryState == nil {
+            log.info("segment: running canary (first call)")
             await runCanary()
         }
 
         // 3. If canary failed → permanent fallback
         if getCanaryState() == false {
             lastFallbackReason = .canaryFailed
+            let iou = lastCanaryResult.map { String(format: "%.4f", $0.iou) } ?? "nil"
+            log.warning("segment: canary failed (iou=\(iou)) → permanent fallback")
             return try await fallback.segment(image: image, tapPoint: tapPoint)
         }
 
         // 4. Try primary (CoreML)
+        log.info("segment: attempting primary (CoreML)")
         do {
             let result = try await primary.segment(image: image, tapPoint: tapPoint)
             lastFallbackReason = nil
+            log.info("segment: primary succeeded, confidence=\(String(format: "%.2f", result.confidence)), latency=\(String(format: "%.0f", result.inferenceLatencyMs))ms")
             return result
         } catch {
             // 5. CoreML failed → fallback for this call
             lastFallbackReason = .coremlInferenceFailed
+            log.error("segment: primary threw \(error.localizedDescription) → fallback")
             return try await fallback.segment(image: image, tapPoint: tapPoint)
         }
     }
@@ -104,9 +120,11 @@ public final class ChainedSegmenter: WoundSegmenter {
     }
 
     private func runCanary() async {
+        let log = Self.logger
         guard let validator = canaryValidator else {
             // No validator → skip canary, assume pass
             setCanaryState(true)
+            log.info("canary: no validator configured, skipping (assume pass)")
             return
         }
 
@@ -114,9 +132,46 @@ public final class ChainedSegmenter: WoundSegmenter {
             let result = try await validator.validate()
             lastCanaryResult = result
             setCanaryState(result.passed)
+            log.info("canary: passed=\(result.passed), iou=\(String(format: "%.4f", result.iou)), expected_px=\(result.expectedPositivePixels), actual_px=\(result.actualPositivePixels), latency=\(String(format: "%.0f", result.latencyMs))ms")
+
+            // Persist canary result to telemetry store for debug screen survival across restarts
+            let canaryRecord = SegmentationTelemetryRecord(
+                segmenterIdentifier: "canary.coreml",
+                inferenceLatencyMs: result.latencyMs,
+                rawConfidence: Float(result.iou),
+                rawCoveragePct: 0,
+                rawAspectRatio: 0,
+                rawComponentCount: 0,
+                qualityResult: result.passed ? "canary_passed" : "canary_failed",
+                qualityDetail: "iou=\(String(format: "%.4f", result.iou)), expected=\(result.expectedPositivePixels), actual=\(result.actualPositivePixels)",
+                onDeviceFlagState: true,
+                canaryIoU: Float(result.iou),
+                canaryPassed: result.passed,
+                chainedSegmenterUsed: true,
+                isCanaryRecord: true
+            )
+            SegmentationTelemetryStore.shared.record(canaryRecord)
         } catch {
             // Canary itself threw → treat as failure
             setCanaryState(false)
+            log.error("canary: threw error → marking failed: \(error.localizedDescription)")
+
+            // Persist canary failure to telemetry
+            let failRecord = SegmentationTelemetryRecord(
+                segmenterIdentifier: "canary.coreml",
+                inferenceLatencyMs: 0,
+                rawConfidence: 0,
+                rawCoveragePct: 0,
+                rawAspectRatio: 0,
+                rawComponentCount: 0,
+                qualityResult: "canary_error",
+                qualityDetail: error.localizedDescription,
+                onDeviceFlagState: true,
+                canaryPassed: false,
+                chainedSegmenterUsed: true,
+                isCanaryRecord: true
+            )
+            SegmentationTelemetryStore.shared.record(failRecord)
         }
     }
 }

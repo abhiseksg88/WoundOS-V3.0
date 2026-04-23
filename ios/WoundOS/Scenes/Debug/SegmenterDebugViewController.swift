@@ -1,4 +1,3 @@
-#if DEBUG
 import UIKit
 import WoundCore
 import WoundAutoSegmentation
@@ -7,7 +6,7 @@ import WoundAutoSegmentation
 
 /// Developer-only diagnostics screen for segmentation pipeline.
 /// Shows feature flags, canary status, telemetry, and wound type override.
-/// All code compiled out in Release builds.
+/// Accessible at runtime via DeveloperMode (5-tap on Scans title).
 final class SegmenterDebugViewController: UITableViewController {
 
     private let dependencies: DependencyContainer
@@ -22,6 +21,7 @@ final class SegmenterDebugViewController: UITableViewController {
         case lastSegmentation
         case recentCaptures
         case woundType
+        case actions
     }
 
     private let sectionTitles: [Section: String] = [
@@ -31,6 +31,7 @@ final class SegmenterDebugViewController: UITableViewController {
         .lastSegmentation: "Last Segmentation",
         .recentCaptures: "Recent Captures",
         .woundType: "Wound Type Override",
+        .actions: "",
     ]
 
     // MARK: - Init
@@ -91,6 +92,11 @@ final class SegmenterDebugViewController: UITableViewController {
         return nil
     }
 
+    /// Capture records only (excludes canary validation records).
+    private var captureRecords: [SegmentationTelemetryRecord] {
+        telemetryRecords.filter { !$0.isCanaryRecord }
+    }
+
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         guard let sec = Section(rawValue: section) else { return 0 }
         switch sec {
@@ -101,11 +107,13 @@ final class SegmenterDebugViewController: UITableViewController {
         case .canaryValidation:
             return 5
         case .lastSegmentation:
-            return telemetryRecords.isEmpty ? 1 : 7
+            return captureRecords.isEmpty ? 1 : 7
         case .recentCaptures:
-            return max(1, min(10, telemetryRecords.count))
+            return max(1, min(10, captureRecords.count))
         case .woundType:
             return WoundType.allCases.count
+        case .actions:
+            return 1
         }
     }
 
@@ -126,6 +134,8 @@ final class SegmenterDebugViewController: UITableViewController {
             return recentCaptureCell(at: indexPath)
         case .woundType:
             return woundTypeCell(at: indexPath)
+        case .actions:
+            return actionCell(at: indexPath)
         }
     }
 
@@ -139,6 +149,9 @@ final class SegmenterDebugViewController: UITableViewController {
             guard indexPath.row < allCases.count else { return }
             WoundTypeOverride.current = allCases[indexPath.row]
             tableView.reloadSections(IndexSet(integer: indexPath.section), with: .none)
+        } else if sec == .actions {
+            DeveloperMode.disable()
+            dismiss(animated: true)
         }
     }
 
@@ -210,30 +223,57 @@ final class SegmenterDebugViewController: UITableViewController {
         config.textProperties.font = .systemFont(ofSize: 14)
         config.secondaryTextProperties.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
 
+        // Read canary from persistent telemetry (survives app restart),
+        // falling back to in-memory lastCanaryResult for current session
         let chained = dependencies.autoSegmenter as? ChainedSegmenter
-        let canary = chained?.lastCanaryResult
+        let persistedCanary = telemetryRecords.last(where: { $0.isCanaryRecord })
+        let inMemoryCanary = chained?.lastCanaryResult
 
         switch indexPath.row {
         case 0:
             config.text = "Status"
-            if let canary {
-                config.secondaryText = canary.passed ? "Passed" : "FAILED"
-                config.secondaryTextProperties.color = canary.passed ? .systemGreen : .systemRed
+            if let persistedCanary {
+                let passed = persistedCanary.canaryPassed == true
+                config.secondaryText = passed ? "Passed" : "FAILED"
+                config.secondaryTextProperties.color = passed ? .systemGreen : .systemRed
+            } else if let inMemoryCanary {
+                config.secondaryText = inMemoryCanary.passed ? "Passed" : "FAILED"
+                config.secondaryTextProperties.color = inMemoryCanary.passed ? .systemGreen : .systemRed
             } else {
                 config.secondaryText = chained != nil ? "Not Run Yet" : "N/A (No ChainedSegmenter)"
             }
         case 1:
             config.text = "IoU"
-            config.secondaryText = canary.map { String(format: "%.4f", $0.iou) } ?? "-"
+            if let iou = persistedCanary?.canaryIoU {
+                config.secondaryText = String(format: "%.4f", iou)
+            } else if let iou = inMemoryCanary?.iou {
+                config.secondaryText = String(format: "%.4f", iou)
+            } else {
+                config.secondaryText = "-"
+            }
         case 2:
-            config.text = "Expected Pixels"
-            config.secondaryText = canary.map { "\($0.expectedPositivePixels)" } ?? "-"
+            config.text = "Detail"
+            config.secondaryText = persistedCanary?.qualityDetail ?? inMemoryCanary.map {
+                "expected=\($0.expectedPositivePixels), actual=\($0.actualPositivePixels)"
+            } ?? "-"
         case 3:
-            config.text = "Actual Pixels"
-            config.secondaryText = canary.map { "\($0.actualPositivePixels)" } ?? "-"
-        case 4:
             config.text = "Latency"
-            config.secondaryText = canary.map { String(format: "%.0f ms", $0.latencyMs) } ?? "-"
+            if let latency = persistedCanary?.inferenceLatencyMs {
+                config.secondaryText = String(format: "%.0f ms", latency)
+            } else if let latency = inMemoryCanary?.latencyMs {
+                config.secondaryText = String(format: "%.0f ms", latency)
+            } else {
+                config.secondaryText = "-"
+            }
+        case 4:
+            config.text = "Timestamp"
+            if let ts = persistedCanary?.timestamp {
+                let fmt = DateFormatter()
+                fmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
+                config.secondaryText = fmt.string(from: ts)
+            } else {
+                config.secondaryText = "-"
+            }
         default:
             break
         }
@@ -250,7 +290,7 @@ final class SegmenterDebugViewController: UITableViewController {
         config.textProperties.font = .systemFont(ofSize: 14)
         config.secondaryTextProperties.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
 
-        guard let record = telemetryRecords.last else {
+        guard let record = captureRecords.last else {
             config.text = "No segmentation data"
             config.secondaryText = nil
             cell.contentConfiguration = config
@@ -295,7 +335,7 @@ final class SegmenterDebugViewController: UITableViewController {
         var config = cell.defaultContentConfiguration()
         config.textProperties.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
 
-        let recentRecords = Array(telemetryRecords.suffix(10).reversed())
+        let recentRecords = Array(captureRecords.suffix(10).reversed())
         guard indexPath.row < recentRecords.count else {
             config.text = "No captures"
             cell.contentConfiguration = config
@@ -332,5 +372,16 @@ final class SegmenterDebugViewController: UITableViewController {
         cell.accessoryType = woundType == WoundTypeOverride.current ? .checkmark : .none
         return cell
     }
+
+    // MARK: - Actions Section
+
+    private func actionCell(at indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+        var config = cell.defaultContentConfiguration()
+        config.text = "Disable Developer Mode"
+        config.textProperties.color = .systemRed
+        config.textProperties.alignment = .center
+        cell.contentConfiguration = config
+        return cell
+    }
 }
-#endif

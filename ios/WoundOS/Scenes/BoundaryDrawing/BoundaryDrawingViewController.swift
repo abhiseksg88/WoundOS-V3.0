@@ -144,7 +144,6 @@ final class BoundaryDrawingViewController: UIViewController {
 
     private var errorDismissTimer: Timer?
 
-    #if DEBUG
     private lazy var woundTypeControl: UISegmentedControl = {
         let items = WoundType.allCases.map { type -> String in
             switch type {
@@ -164,7 +163,6 @@ final class BoundaryDrawingViewController: UIViewController {
         control.backgroundColor = UIColor.black.withAlphaComponent(0.5)
         return control
     }()
-    #endif
 
     /// Cached geometry recomputed every layout pass (Bug 4).
     private var currentGeometry = ImageViewGeometry(sensorSize: .zero, displayedSize: .zero, viewSize: .zero)
@@ -264,9 +262,9 @@ final class BoundaryDrawingViewController: UIViewController {
         view.addSubview(errorBanner)
         view.addSubview(processingOverlay)
 
-        #if DEBUG
-        view.addSubview(woundTypeControl)
-        #endif
+        if DeveloperMode.isEnabled {
+            view.addSubview(woundTypeControl)
+        }
 
         instructionCard.contentView.addSubview(instructionLabel)
 
@@ -303,13 +301,13 @@ final class BoundaryDrawingViewController: UIViewController {
 
         ])
 
-        #if DEBUG
-        NSLayoutConstraint.activate([
-            woundTypeControl.topAnchor.constraint(equalTo: instructionCard.bottomAnchor, constant: WOSpacing.sm),
-            woundTypeControl.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            woundTypeControl.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -WOSpacing.lg * 2),
-        ])
-        #endif
+        if DeveloperMode.isEnabled {
+            NSLayoutConstraint.activate([
+                woundTypeControl.topAnchor.constraint(equalTo: instructionCard.bottomAnchor, constant: WOSpacing.sm),
+                woundTypeControl.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                woundTypeControl.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -WOSpacing.lg * 2),
+            ])
+        }
 
         NSLayoutConstraint.activate([
             // Warning banner (yellow, non-blocking validation)
@@ -530,7 +528,6 @@ final class BoundaryDrawingViewController: UIViewController {
         viewModel.error = nil
     }
 
-    #if DEBUG
     @objc private func woundTypeChanged() {
         let index = woundTypeControl.selectedSegmentIndex
         let allCases = Array(WoundType.allCases)
@@ -538,7 +535,6 @@ final class BoundaryDrawingViewController: UIViewController {
         WoundTypeOverride.current = allCases[index]
         CrashLogger.shared.log("Wound type override: \(allCases[index].rawValue)", category: .segmentation)
     }
-    #endif
 
     @objc private func confirmTapped() {
         guard viewModel.boundaryFinalized else { return }

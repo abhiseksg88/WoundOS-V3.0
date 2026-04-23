@@ -30,9 +30,12 @@ public final class UserDefaultsFlagStore: FeatureFlagStore, @unchecked Sendable 
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        // Register defaults: V5 LiDAR capture ON for dev TestFlight builds
+        // Register defaults for TestFlight / internal dogfooding.
+        // TODO: FLIP .onDeviceSegmentation TO FALSE BEFORE APP STORE SUBMISSION
+        // See FLAG_DEFAULTS.md for the full flag flip checklist.
         defaults.register(defaults: [
             FeatureFlag.v5LidarCapture.rawValue: true,
+            FeatureFlag.onDeviceSegmentation.rawValue: true,
         ])
     }
 

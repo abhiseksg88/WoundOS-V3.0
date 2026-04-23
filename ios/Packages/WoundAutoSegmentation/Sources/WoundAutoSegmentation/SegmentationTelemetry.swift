@@ -26,6 +26,11 @@ public struct SegmentationTelemetryRecord: Codable, Sendable {
     public let fallbackReason: String?
     public let chainedSegmenterUsed: Bool
 
+    // Phase 3a.3 — Canary telemetry persistence
+    /// True if this record represents a canary validation run (not a real capture).
+    /// Used to separate canary records from capture records in the debug screen.
+    public let isCanaryRecord: Bool
+
     public init(
         captureUUID: String = UUID().uuidString,
         timestamp: Date = Date(),
@@ -42,7 +47,8 @@ public struct SegmentationTelemetryRecord: Codable, Sendable {
         canaryIoU: Float? = nil,
         canaryPassed: Bool? = nil,
         fallbackReason: String? = nil,
-        chainedSegmenterUsed: Bool = false
+        chainedSegmenterUsed: Bool = false,
+        isCanaryRecord: Bool = false
     ) {
         self.captureUUID = captureUUID
         self.timestamp = timestamp
@@ -60,6 +66,7 @@ public struct SegmentationTelemetryRecord: Codable, Sendable {
         self.canaryPassed = canaryPassed
         self.fallbackReason = fallbackReason
         self.chainedSegmenterUsed = chainedSegmenterUsed
+        self.isCanaryRecord = isCanaryRecord
     }
 
     /// Build a telemetry record from a SegmentationResult.
@@ -70,6 +77,7 @@ public struct SegmentationTelemetryRecord: Codable, Sendable {
         canaryPassed: Bool? = nil,
         fallbackReason: String? = nil,
         chainedSegmenterUsed: Bool = false,
+        isCanaryRecord: Bool = false,
         captureUUID: String = UUID().uuidString
     ) -> SegmentationTelemetryRecord {
         let polyArea = abs(shoelaceArea(result.polygonImageSpace))
@@ -106,7 +114,8 @@ public struct SegmentationTelemetryRecord: Codable, Sendable {
             canaryIoU: canaryIoU,
             canaryPassed: canaryPassed,
             fallbackReason: fallbackReason,
-            chainedSegmenterUsed: chainedSegmenterUsed
+            chainedSegmenterUsed: chainedSegmenterUsed,
+            isCanaryRecord: isCanaryRecord
         )
     }
 
