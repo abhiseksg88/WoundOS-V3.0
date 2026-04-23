@@ -28,8 +28,9 @@ final class BrandedNavigationController: UINavigationController {
         container.spacing = 8
         container.alignment = .center
 
-        // Logo — height matches the title label font size, width scales proportionally
-        let imageView = UIImageView(image: UIImage(named: "WoundOSLogo")?.withRenderingMode(.alwaysOriginal))
+        // Logo — template rendering so it tints with .label color (visible on any background)
+        let imageView = UIImageView(image: UIImage(named: "WoundOSLogo")?.withRenderingMode(.alwaysTemplate))
+        imageView.tintColor = .label
         imageView.contentMode = .scaleAspectFit
         imageView.translatesAutoresizingMaskIntoConstraints = false
         let logoHeight: CGFloat = 17
