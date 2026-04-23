@@ -45,9 +45,19 @@ final class BoundaryDrawingViewModel: ObservableObject {
     private var boundaryWasAutoSeeded = false
     private(set) var segmenterModelId: String?
 
+    /// Active measurement task — stored so it can be cancelled on deinit.
+    private var measurementTask: Task<Void, Never>?
+    /// Active auto-segmentation task — stored so it can be cancelled on deinit.
+    private var segmentationTask: Task<Void, Never>?
+
     /// Exposes the model identifier of the last successful segmentation
     /// so the VC can indicate which model detected the boundary.
     var lastSegmenterModelId: String? { segmenterModelId }
+
+    deinit {
+        measurementTask?.cancel()
+        segmentationTask?.cancel()
+    }
 
     /// The captured RGB image for display, cached to avoid repeated JPEG decoding.
     /// ARKit's pixel buffer is always landscape-right. Apply `.right`
@@ -149,7 +159,9 @@ final class BoundaryDrawingViewModel: ObservableObject {
         CrashLogger.shared.log("Sensor tap coords: \(sensorTap), image: \(cgImage.width)x\(cgImage.height)", category: .segmentation)
 
         isAutoSegmenting = true
-        Task { @MainActor in
+        segmentationTask?.cancel()
+        segmentationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
             defer { isAutoSegmenting = false }
             do {
                 let result = try await segmenter.segment(
@@ -301,7 +313,9 @@ final class BoundaryDrawingViewModel: ObservableObject {
         CrashLogger.shared.log("Starting measurement pipeline — \(normalizedBoundaryPoints.count) boundary points", category: .measurement)
         isComputing = true
 
-        Task { @MainActor in
+        measurementTask?.cancel()
+        measurementTask = Task { @MainActor [weak self] in
+            guard let self else { return }
             do {
                 // 1. Build CaptureData from snapshot
                 CrashLogger.shared.log("Step 1: Building CaptureData from snapshot", category: .measurement)

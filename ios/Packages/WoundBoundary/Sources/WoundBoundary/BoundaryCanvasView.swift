@@ -322,13 +322,12 @@ public final class BoundaryCanvasView: UIView {
     /// Reduce point count while preserving shape. Essential for freeform traces
     /// that can produce hundreds of raw touch points.
     private func douglasPeucker(_ points: [CGPoint], epsilon: CGFloat) -> [CGPoint] {
-        guard points.count > 2 else { return points }
+        guard points.count > 2,
+              let start = points.first,
+              let end = points.last else { return points }
 
         var maxDistance: CGFloat = 0
         var maxIndex = 0
-
-        let start = points.first!
-        let end = points.last!
 
         for i in 1..<(points.count - 1) {
             let d = perpendicularDistance(point: points[i], lineStart: start, lineEnd: end)

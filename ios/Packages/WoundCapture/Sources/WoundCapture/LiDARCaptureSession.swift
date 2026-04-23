@@ -306,19 +306,27 @@ public final class LiDARCaptureSession: NSObject, CaptureProviderProtocol {
             let vertexCount = vertexBuffer.count
             let vertexStride = vertexBuffer.stride
 
+            // Extract x,y,z individually to avoid reading 16 bytes
+            // (SIMD3 has SIMD4 backing) at a 12-byte stride boundary.
             for i in 0..<vertexCount {
-                let vertexPointer = vertexBuffer.buffer.contents()
+                let base = vertexBuffer.buffer.contents()
                     .advanced(by: vertexBuffer.offset + i * vertexStride)
-                let localVertex = vertexPointer.assumingMemoryBound(to: SIMD3<Float>.self).pointee
+                let x = base.assumingMemoryBound(to: Float.self).pointee
+                let y = base.advanced(by: 4).assumingMemoryBound(to: Float.self).pointee
+                let z = base.advanced(by: 8).assumingMemoryBound(to: Float.self).pointee
+                let localVertex = SIMD3<Float>(x, y, z)
                 let worldVertex = transform.transformPoint(localVertex)
                 allVertices.append(worldVertex)
             }
 
             let normalBuffer = geometry.normals
             for i in 0..<normalBuffer.count {
-                let normalPointer = normalBuffer.buffer.contents()
+                let base = normalBuffer.buffer.contents()
                     .advanced(by: normalBuffer.offset + i * normalBuffer.stride)
-                let localNormal = normalPointer.assumingMemoryBound(to: SIMD3<Float>.self).pointee
+                let x = base.assumingMemoryBound(to: Float.self).pointee
+                let y = base.advanced(by: 4).assumingMemoryBound(to: Float.self).pointee
+                let z = base.advanced(by: 8).assumingMemoryBound(to: Float.self).pointee
+                let localNormal = SIMD3<Float>(x, y, z)
                 let worldNormal = transform.transformDirection(localNormal).normalized
                 allNormals.append(worldNormal)
             }
