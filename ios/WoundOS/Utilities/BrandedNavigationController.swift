@@ -25,16 +25,16 @@ final class BrandedNavigationController: UINavigationController {
 
         let container = UIStackView()
         container.axis = .horizontal
-        container.spacing = 6
+        container.spacing = 8
         container.alignment = .center
 
-        let imageView = UIImageView(image: UIImage(named: "WoundOSLogo")?.withRenderingMode(.alwaysTemplate))
-        imageView.tintColor = .label
+        // Logo — prominent size like ServiceNow/Salesforce nav branding
+        let imageView = UIImageView(image: UIImage(named: "WoundOSLogo")?.withRenderingMode(.alwaysOriginal))
         imageView.contentMode = .scaleAspectFit
         imageView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            imageView.widthAnchor.constraint(equalToConstant: 24),
-            imageView.heightAnchor.constraint(equalToConstant: 24),
+            imageView.widthAnchor.constraint(equalToConstant: 36),
+            imageView.heightAnchor.constraint(equalToConstant: 36),
         ])
 
         let label = UILabel()
