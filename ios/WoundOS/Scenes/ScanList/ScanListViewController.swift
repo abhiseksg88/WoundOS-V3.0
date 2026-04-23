@@ -8,6 +8,7 @@ import WoundCore
 final class ScanListViewController: UIViewController {
 
     private let viewModel: ScanListViewModel
+    private let dependencies: DependencyContainer?
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - UI
@@ -75,8 +76,9 @@ final class ScanListViewController: UIViewController {
 
     // MARK: - Init
 
-    init(viewModel: ScanListViewModel) {
+    init(viewModel: ScanListViewModel, dependencies: DependencyContainer? = nil) {
         self.viewModel = viewModel
+        self.dependencies = dependencies
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -113,6 +115,16 @@ final class ScanListViewController: UIViewController {
         )
         navigationItem.rightBarButtonItem?.accessibilityLabel = "Share Debug Logs"
 
+        #if DEBUG
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "gearshape"),
+            style: .plain,
+            target: self,
+            action: #selector(debugTapped)
+        )
+        navigationItem.leftBarButtonItem?.accessibilityLabel = "Segmenter Debug"
+        #endif
+
         view.addSubview(tableView)
         view.addSubview(emptyStateView)
 
@@ -145,6 +157,15 @@ final class ScanListViewController: UIViewController {
     @objc private func refreshPulled() {
         viewModel.loadScans()
     }
+
+    #if DEBUG
+    @objc private func debugTapped() {
+        guard let deps = dependencies else { return }
+        let debugVC = SegmenterDebugViewController(dependencies: deps)
+        let nav = UINavigationController(rootViewController: debugVC)
+        present(nav, animated: true)
+    }
+    #endif
 
     @objc private func shareLogsTapped() {
         CrashLogger.shared.log("User tapped Share Logs", category: .app)

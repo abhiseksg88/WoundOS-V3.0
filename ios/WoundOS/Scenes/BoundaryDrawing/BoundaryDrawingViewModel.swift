@@ -169,9 +169,14 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 lastQualityResult = result.qualityResult
 
                 // Record telemetry for every segmentation attempt
+                let chained = self.segmenter as? ChainedSegmenter
                 let telemetry = SegmentationTelemetryRecord.from(
                     result: result,
-                    onDeviceFlagState: FeatureFlags.isEnabled(.onDeviceSegmentation)
+                    onDeviceFlagState: FeatureFlags.isEnabled(.onDeviceSegmentation),
+                    canaryIoU: chained?.lastCanaryResult?.iou,
+                    canaryPassed: chained?.lastCanaryResult?.passed,
+                    fallbackReason: chained?.lastFallbackReason?.rawValue,
+                    chainedSegmenterUsed: chained != nil
                 )
                 SegmentationTelemetryStore.shared.record(telemetry)
 
@@ -196,12 +201,7 @@ final class BoundaryDrawingViewModel: ObservableObject {
                 autoSegmentationResult.send(viewPolygon)
             } catch {
                 CrashLogger.shared.error("Auto-segmentation failed", category: .segmentation, error: error)
-                if let segErr = error as? SegmentationError,
-                   case .serviceUnavailable = segErr {
-                    self.error = "Segmentation unavailable. Please retry, check connection, or use Draw Manually."
-                } else {
-                    self.error = "Segmentation failed: \(error.localizedDescription)"
-                }
+                self.error = SegmentationErrorMessages.userMessage(for: error)
             }
         }
     }

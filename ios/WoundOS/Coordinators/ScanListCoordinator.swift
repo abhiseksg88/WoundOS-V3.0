@@ -21,7 +21,7 @@ final class ScanListCoordinator: Coordinator {
             self?.showScanDetail(scan: scan)
         }
 
-        let viewController = ScanListViewController(viewModel: viewModel)
+        let viewController = ScanListViewController(viewModel: viewModel, dependencies: dependencies)
         viewController.title = "Wound Scans"
         navigationController.setViewControllers([viewController], animated: false)
     }

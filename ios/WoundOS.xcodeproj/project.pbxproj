@@ -22,6 +22,9 @@
 		249019F92F987A42006CFC7B /* CaptureBundleEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019F82F987A42006CFC7B /* CaptureBundleEntity.swift */; };
 		249019FB2F987A42006CFC7B /* SwiftDataCaptureBundleStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019FA2F987A42006CFC7B /* SwiftDataCaptureBundleStore.swift */; };
 		249019FD2F989EAC006CFC7B /* Settings 2.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 249019FC2F989EAC006CFC7B /* Settings 2.bundle */; };
+		249019FF2F99C5F3006CFC7B /* SegmentationErrorMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019FE2F99C5F3006CFC7B /* SegmentationErrorMessages.swift */; };
+		24901A012F99C61B006CFC7B /* WoundTypeOverride.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24901A002F99C61B006CFC7B /* WoundTypeOverride.swift */; };
+		24901A042F99C694006CFC7B /* SegmenterDebugViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24901A032F99C694006CFC7B /* SegmenterDebugViewController.swift */; };
 		249403B82F972F9F000FB77F /* CrashLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249403B72F972F9F000FB77F /* CrashLogger.swift */; };
 		BBBB00000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000001 /* AppDelegate.swift */; };
 		BBBB00000000000000000002 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000002 /* DependencyContainer.swift */; };
@@ -67,6 +70,9 @@
 		249019F82F987A42006CFC7B /* CaptureBundleEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureBundleEntity.swift; sourceTree = "<group>"; };
 		249019FA2F987A42006CFC7B /* SwiftDataCaptureBundleStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataCaptureBundleStore.swift; sourceTree = "<group>"; };
 		249019FC2F989EAC006CFC7B /* Settings 2.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = "Settings 2.bundle"; sourceTree = "<group>"; };
+		249019FE2F99C5F3006CFC7B /* SegmentationErrorMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentationErrorMessages.swift; sourceTree = "<group>"; };
+		24901A002F99C61B006CFC7B /* WoundTypeOverride.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WoundTypeOverride.swift; sourceTree = "<group>"; };
+		24901A032F99C694006CFC7B /* SegmenterDebugViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmenterDebugViewController.swift; sourceTree = "<group>"; };
 		249403B72F972F9F000FB77F /* CrashLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashLogger.swift; sourceTree = "<group>"; };
 		AAAA00000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AAAA00000000000000000002 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
@@ -134,11 +140,21 @@
 			path = Storage;
 			sourceTree = "<group>";
 		};
+		24901A022F99C66B006CFC7B /* Debug */ = {
+			isa = PBXGroup;
+			children = (
+				24901A032F99C694006CFC7B /* SegmenterDebugViewController.swift */,
+			);
+			path = Debug;
+			sourceTree = "<group>";
+		};
 		249403B62F972F81000FB77F /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
 				249403B72F972F9F000FB77F /* CrashLogger.swift */,
 				249019E22F98790D006CFC7B /* FeatureFlags.swift */,
+				249019FE2F99C5F3006CFC7B /* SegmentationErrorMessages.swift */,
+				24901A002F99C61B006CFC7B /* WoundTypeOverride.swift */,
 			);
 			path = Utilities;
 			sourceTree = "<group>";
@@ -196,6 +212,7 @@
 				CCCC00000000000000000009 /* ScanDetail */,
 				CCCC00000000000000000010 /* ScanList */,
 				249019E42F9879D4006CFC7B /* V5Capture */,
+				24901A022F99C66B006CFC7B /* Debug */,
 			);
 			path = Scenes;
 			sourceTree = "<group>";
@@ -372,6 +389,8 @@
 				BBBB00000000000000000009 /* BoundaryDrawingViewModel.swift in Sources */,
 				BBBB00000000000000000010 /* CaptureViewController.swift in Sources */,
 				BBBB00000000000000000011 /* CaptureViewModel.swift in Sources */,
+				24901A012F99C61B006CFC7B /* WoundTypeOverride.swift in Sources */,
+				24901A042F99C694006CFC7B /* SegmenterDebugViewController.swift in Sources */,
 				BBBB00000000000000000012 /* MeasurementResultViewController.swift in Sources */,
 				249019E32F98790D006CFC7B /* FeatureFlags.swift in Sources */,
 				249019F42F987A21006CFC7B /* GuidanceCardView.swift in Sources */,
@@ -390,6 +409,7 @@
 				BBBB00000000000000000017 /* ScanListViewController.swift in Sources */,
 				BBBB00000000000000000018 /* ScanListViewModel.swift in Sources */,
 				249403B82F972F9F000FB77F /* CrashLogger.swift in Sources */,
+				249019FF2F99C5F3006CFC7B /* SegmentationErrorMessages.swift in Sources */,
 				BBBB00000000000000000019 /* HealthStyleComponents.swift in Sources */,
 				249019FB2F987A42006CFC7B /* SwiftDataCaptureBundleStore.swift in Sources */,
 				BBBB00000000000000000020 /* WoundImageOverlayView.swift in Sources */,
@@ -405,7 +425,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = 829CPR87G4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
@@ -433,7 +453,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = 829CPR87G4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;

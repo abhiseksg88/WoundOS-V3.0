@@ -144,6 +144,28 @@ final class BoundaryDrawingViewController: UIViewController {
 
     private var errorDismissTimer: Timer?
 
+    #if DEBUG
+    private lazy var woundTypeControl: UISegmentedControl = {
+        let items = WoundType.allCases.map { type -> String in
+            switch type {
+            case .footUlcer: return "Foot"
+            case .pressureInjury: return "Pressure"
+            case .surgicalWound: return "Surgical"
+            case .venousLegUlcer: return "Venous"
+            case .unknown: return "Unknown"
+            }
+        }
+        let control = UISegmentedControl(items: items)
+        control.translatesAutoresizingMaskIntoConstraints = false
+        control.selectedSegmentIndex = WoundType.allCases.firstIndex(of: WoundTypeOverride.current) ?? (WoundType.allCases.count - 1)
+        control.addTarget(self, action: #selector(woundTypeChanged), for: .valueChanged)
+        let font = UIFont.systemFont(ofSize: 10, weight: .medium)
+        control.setTitleTextAttributes([.font: font], for: .normal)
+        control.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        return control
+    }()
+    #endif
+
     /// Cached geometry recomputed every layout pass (Bug 4).
     private var currentGeometry = ImageViewGeometry(sensorSize: .zero, displayedSize: .zero, viewSize: .zero)
 
@@ -242,6 +264,10 @@ final class BoundaryDrawingViewController: UIViewController {
         view.addSubview(errorBanner)
         view.addSubview(processingOverlay)
 
+        #if DEBUG
+        view.addSubview(woundTypeControl)
+        #endif
+
         instructionCard.contentView.addSubview(instructionLabel)
 
         // Bottom bar content
@@ -275,6 +301,17 @@ final class BoundaryDrawingViewController: UIViewController {
             instructionLabel.trailingAnchor.constraint(equalTo: instructionCard.contentView.trailingAnchor, constant: -WOSpacing.lg),
             instructionLabel.centerYAnchor.constraint(equalTo: instructionCard.contentView.centerYAnchor),
 
+        ])
+
+        #if DEBUG
+        NSLayoutConstraint.activate([
+            woundTypeControl.topAnchor.constraint(equalTo: instructionCard.bottomAnchor, constant: WOSpacing.sm),
+            woundTypeControl.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            woundTypeControl.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, constant: -WOSpacing.lg * 2),
+        ])
+        #endif
+
+        NSLayoutConstraint.activate([
             // Warning banner (yellow, non-blocking validation)
             warningBanner.bottomAnchor.constraint(equalTo: bottomBar.topAnchor, constant: -WOSpacing.sm),
             warningBanner.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: WOSpacing.lg),
@@ -347,7 +384,7 @@ final class BoundaryDrawingViewController: UIViewController {
                 self.errorDismissTimer?.invalidate()
                 if let message = errorMessage, !message.isEmpty {
                     self.errorBanner.isHidden = false
-                    self.errorBanner.text = "  \(message). Try Polygon or Freeform.  "
+                    self.errorBanner.text = "  \(message)  "
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                     self.errorDismissTimer = Timer.scheduledTimer(
                         withTimeInterval: 6.0, repeats: false
@@ -492,6 +529,16 @@ final class BoundaryDrawingViewController: UIViewController {
         errorBanner.isHidden = true
         viewModel.error = nil
     }
+
+    #if DEBUG
+    @objc private func woundTypeChanged() {
+        let index = woundTypeControl.selectedSegmentIndex
+        let allCases = Array(WoundType.allCases)
+        guard index >= 0, index < allCases.count else { return }
+        WoundTypeOverride.current = allCases[index]
+        CrashLogger.shared.log("Wound type override: \(allCases[index].rawValue)", category: .segmentation)
+    }
+    #endif
 
     @objc private func confirmTapped() {
         guard viewModel.boundaryFinalized else { return }

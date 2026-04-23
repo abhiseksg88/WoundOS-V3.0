@@ -205,6 +205,10 @@ final class MaskQualityGateTests: XCTestCase {
         for reason in reasons {
             let msg = MaskQualityGate.userMessage(for: reason)
             XCTAssertFalse(msg.isEmpty, "No message for \(reason)")
+            XCTAssertTrue(
+                msg.contains("Draw Manually"),
+                "Missing 'Draw Manually' for \(reason): \(msg)"
+            )
         }
     }
 

@@ -214,15 +214,15 @@ public struct MaskQualityGate {
     public static func userMessage(for reason: MaskRejectionReason) -> String {
         switch reason {
         case .coverageTooSmall:
-            return "Detected area too small. Move closer and retry."
+            return "Detected area too small. Move closer or use Draw Manually."
         case .coverageTooLarge:
-            return "Detected area too large. Frame only the wound and retry."
+            return "Detected area too large. Frame only the wound or use Draw Manually."
         case .frameEdgeContact:
-            return "Could not isolate wound. Frame it clearly in the center."
+            return "Could not isolate wound. Reframe or use Draw Manually."
         case .aspectRatioInvalid:
-            return "Detected shape is unusual. Try a different angle."
+            return "Detected shape is unusual. Try a different angle or use Draw Manually."
         case .disconnectedComponents:
-            return "Multiple regions detected. Frame only the wound."
+            return "Multiple regions detected. Reframe or use Draw Manually."
         case .confidenceTooLow:
             return "Not confident this is a wound. Try Draw Manually."
         case .degeneratePolygon:
