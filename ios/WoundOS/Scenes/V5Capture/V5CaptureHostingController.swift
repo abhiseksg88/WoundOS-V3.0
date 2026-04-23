@@ -25,20 +25,22 @@ final class V5CaptureHostingController: UIHostingController<V5CaptureView> {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
 
-        guard !hasCheckedLiDAR else { return }
-        hasCheckedLiDAR = true
+        // One-shot LiDAR capability check
+        if !hasCheckedLiDAR {
+            hasCheckedLiDAR = true
 
-        #if !targetEnvironment(simulator)
-        if !ARWorldTrackingConfiguration.supportsFrameSemantics([.sceneDepth, .smoothedSceneDepth]) {
+            #if !targetEnvironment(simulator)
+            if !ARWorldTrackingConfiguration.supportsFrameSemantics([.sceneDepth, .smoothedSceneDepth]) {
+                showLiDARUnavailableAlert()
+                return
+            }
+            #else
             showLiDARUnavailableAlert()
             return
+            #endif
         }
-        #else
-        // On simulator, show warning but allow UI inspection
-        showLiDARUnavailableAlert()
-        return
-        #endif
 
+        // Resume AR session every time this screen appears
         viewModel.startSession()
     }
 
