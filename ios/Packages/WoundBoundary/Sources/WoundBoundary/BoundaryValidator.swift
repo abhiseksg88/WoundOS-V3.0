@@ -73,6 +73,16 @@ public enum BoundaryValidator {
             return BoundaryValidationResult(isValid: false, errors: errors)
         }
 
+        // Bail out of optional checks if any point contains NaN/Inf —
+        // downstream measurement handles bad geometry; no need to risk
+        // a trap in the warning-only code path.
+        let hasNonFinite = points.contains { p in
+            !p.x.isFinite || !p.y.isFinite
+        }
+        if hasNonFinite {
+            return BoundaryValidationResult(isValid: true, errors: errors)
+        }
+
         // Check bounds (all points within 0...1)
         let outOfBounds = points.contains { p in
             p.x < -0.01 || p.x > 1.01 || p.y < -0.01 || p.y > 1.01
@@ -81,10 +91,10 @@ public enum BoundaryValidator {
             errors.append(.boundaryOutOfBounds)
         }
 
-        // Check for self-intersection (warning only)
-        if isSelfIntersecting(points) {
-            errors.append(.selfIntersecting)
-        }
+        // Self-intersection check REMOVED — it caused persistent SIGTRAP
+        // crashes across builds 12–29 in the O(n²) segment-intersection
+        // loop. The 20-point cap mitigated but didn't eliminate it.
+        // Since this is a non-blocking warning only, the risk isn't worth it.
 
         // Check minimum area using shoelace formula (warning only)
         let area = polygonArea(points)
