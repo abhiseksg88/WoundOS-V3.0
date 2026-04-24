@@ -5,6 +5,7 @@ import WoundCapture
 import WoundMeasurement
 import WoundNetworking
 import WoundAutoSegmentation
+import CaptureSync
 
 // MARK: - Dependency Container
 
@@ -138,6 +139,18 @@ final class DependencyContainer {
 
     lazy var uploadManager: UploadManager = {
         UploadManager(client: apiClient, storage: localStorage)
+    }()
+
+    // MARK: - Clinical Platform (Replit Upload)
+
+    lazy var clinicalPlatformKeychain: ClinicalPlatformKeychain = {
+        CrashLogger.shared.log("Initializing ClinicalPlatformKeychain", category: .network)
+        return ClinicalPlatformKeychain()
+    }()
+
+    lazy var clinicalPlatformClient: ClinicalPlatformClient = {
+        CrashLogger.shared.log("Initializing ClinicalPlatformClient", category: .network)
+        return ClinicalPlatformClient()
     }()
 
     // MARK: - Storage

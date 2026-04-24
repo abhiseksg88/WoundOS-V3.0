@@ -1,5 +1,6 @@
 import UIKit
 import WoundCore
+import CaptureSync
 
 // MARK: - Scan List Coordinator
 
@@ -23,7 +24,34 @@ final class ScanListCoordinator: Coordinator {
 
         let viewController = ScanListViewController(viewModel: viewModel, dependencies: dependencies)
         viewController.title = "Wound Scans"
+        viewController.onSettingsTapped = { [weak self] in
+            self?.showSettings()
+        }
         navigationController.setViewControllers([viewController], animated: false)
+    }
+
+    private func showSettings() {
+        let keychain = dependencies.clinicalPlatformKeychain
+        let client = dependencies.clinicalPlatformClient
+
+        let settingsVC = SettingsViewController(keychain: keychain)
+
+        settingsVC.onClinicalPlatformTapped = { [weak settingsVC] in
+            let clinicalVC = ClinicalPlatformSettingsViewController(
+                keychain: keychain,
+                client: client
+            )
+            settingsVC?.navigationController?.pushViewController(clinicalVC, animated: true)
+        }
+
+        settingsVC.onDeveloperToolsTapped = { [weak self, weak settingsVC] in
+            guard let self else { return }
+            let debugVC = SegmenterDebugViewController(dependencies: self.dependencies)
+            settingsVC?.navigationController?.pushViewController(debugVC, animated: true)
+        }
+
+        let nav = UINavigationController(rootViewController: settingsVC)
+        navigationController.present(nav, animated: true)
     }
 
     private func showScanDetail(scan: WoundScan) {

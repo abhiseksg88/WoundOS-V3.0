@@ -7,6 +7,8 @@ import WoundCore
 /// Apple Health-style list of wound scans with large title navigation.
 final class ScanListViewController: UIViewController {
 
+    var onSettingsTapped: (() -> Void)?
+
     private let viewModel: ScanListViewModel
     private let dependencies: DependencyContainer?
     private var cancellables = Set<AnyCancellable>()
@@ -98,7 +100,6 @@ final class ScanListViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         viewModel.loadScans()
-        updateDebugButton()
     }
 
     // MARK: - UI Setup
@@ -116,7 +117,13 @@ final class ScanListViewController: UIViewController {
         )
         navigationItem.rightBarButtonItem?.accessibilityLabel = "Share Debug Logs"
 
-        updateDebugButton()
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "gearshape"),
+            style: .plain,
+            target: self,
+            action: #selector(settingsTapped)
+        )
+        navigationItem.leftBarButtonItem?.accessibilityLabel = "Settings"
 
         view.addSubview(tableView)
         view.addSubview(emptyStateView)
@@ -151,19 +158,8 @@ final class ScanListViewController: UIViewController {
         viewModel.loadScans()
     }
 
-    /// Show/hide gear icon based on DeveloperMode state.
-    private func updateDebugButton() {
-        if DeveloperMode.isEnabled {
-            navigationItem.leftBarButtonItem = UIBarButtonItem(
-                image: UIImage(systemName: "gearshape"),
-                style: .plain,
-                target: self,
-                action: #selector(debugTapped)
-            )
-            navigationItem.leftBarButtonItem?.accessibilityLabel = "Segmenter Debug"
-        } else {
-            navigationItem.leftBarButtonItem = nil
-        }
+    @objc private func settingsTapped() {
+        onSettingsTapped?()
     }
 
     /// 5-tap on nav bar activates Developer Mode. No visible UI affordance.
@@ -175,24 +171,16 @@ final class ScanListViewController: UIViewController {
 
     @objc private func developerModeTapped() {
         DeveloperMode.toggle()
-        updateDebugButton()
         let state = DeveloperMode.isEnabled ? "ON" : "OFF"
         let alert = UIAlertController(
             title: "Developer Mode: \(state)",
             message: DeveloperMode.isEnabled
-                ? "Gear icon added. Restart capture flow for full effect."
+                ? "Developer tools now visible in Settings. Restart capture flow for full effect."
                 : "Developer tools hidden.",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
-    }
-
-    @objc private func debugTapped() {
-        guard let deps = dependencies else { return }
-        let debugVC = SegmenterDebugViewController(dependencies: deps)
-        let nav = UINavigationController(rootViewController: debugVC)
-        present(nav, animated: true)
     }
 
     @objc private func shareLogsTapped() {
