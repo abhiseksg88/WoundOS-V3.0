@@ -94,6 +94,7 @@ final class MeasurementResultViewController: UIViewController {
         setupUI()
         configureContent()
         bindViewModel()
+        viewModel.logAreaDiagnostics()
     }
 
     // MARK: - UI Setup
@@ -227,8 +228,6 @@ final class MeasurementResultViewController: UIViewController {
             measurementStack.bottomAnchor.constraint(equalTo: measurementCard.bottomAnchor),
         ])
 
-        measurementStack.addArrangedSubview(
-            WOMeasurementRow(label: "Area", value: viewModel.areaValue, unit: viewModel.areaUnit))
         measurementStack.addArrangedSubview(
             WOMeasurementRow(label: "Length", value: viewModel.lengthValue, unit: viewModel.lengthUnit))
         measurementStack.addArrangedSubview(

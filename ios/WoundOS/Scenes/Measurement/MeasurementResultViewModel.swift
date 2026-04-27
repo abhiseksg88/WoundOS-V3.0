@@ -132,6 +132,59 @@ final class MeasurementResultViewModel: ObservableObject {
         scan.pushScore.tissueType.displayName
     }
 
+    // MARK: - Area Diagnostics
+
+    func logAreaDiagnostics() {
+        let pts2D = scan.nurseBoundary.points2D
+        let pts3D = scan.nurseBoundary.projectedPoints3D
+        let m = scan.primaryMeasurement
+
+        let first3_2D = pts2D.prefix(3).map { "(\($0.x), \($0.y))" }.joined(separator: ", ")
+        let last3_2D = pts2D.suffix(3).map { "(\($0.x), \($0.y))" }.joined(separator: ", ")
+
+        let xVals = pts2D.map(\.x)
+        let yVals = pts2D.map(\.y)
+        let coordSpace = (xVals.max() ?? 0) <= 1.1 ? "normalized [0,1]" : "pixel coords"
+
+        let pts3DCount = pts3D?.count ?? 0
+        let first3_3D = (pts3D ?? []).prefix(3).map { "(\($0.x), \($0.y), \($0.z))" }.joined(separator: ", ")
+        let last3_3D = (pts3D ?? []).suffix(3).map { "(\($0.x), \($0.y), \($0.z))" }.joined(separator: ", ")
+
+        let lengthCm = m.lengthMm / 10.0
+        let widthCm = m.widthMm / 10.0
+        let lxw = lengthCm * widthCm
+        let meshAreaCm2 = m.areaCm2
+        let newellAreaCm2 = polygonAreaCm2
+        let newellRatio = lxw > 0 ? newellAreaCm2 / lxw : 0
+        let meshRatio = newellAreaCm2 > 0 ? meshAreaCm2 / newellAreaCm2 : 0
+
+        let imgW = scan.captureData.imageWidth
+        let imgH = scan.captureData.imageHeight
+
+        CrashLogger.shared.logDiagnostics("AREA_DEBUG", category: .measurement, data: [
+            "01_pts2D_count": pts2D.count,
+            "02_first3_2D": first3_2D,
+            "03_last3_2D": last3_2D,
+            "04_coordSpace": coordSpace,
+            "05_xRange": "\(xVals.min() ?? 0)...\(xVals.max() ?? 0)",
+            "06_yRange": "\(yVals.min() ?? 0)...\(yVals.max() ?? 0)",
+            "07_pts3D_count": pts3DCount,
+            "08_first3_3D": first3_3D,
+            "09_last3_3D": last3_3D,
+            "10_imageRes": "\(imgW)x\(imgH)",
+            "11_lengthCm": String(format: "%.4f", lengthCm),
+            "12_widthCm": String(format: "%.4f", widthCm),
+            "13_LxW_cm2": String(format: "%.4f", lxw),
+            "14_meshAreaCm2": String(format: "%.4f", meshAreaCm2),
+            "15_newellAreaCm2": String(format: "%.4f", newellAreaCm2),
+            "16_newell_vs_LxW": String(format: "%.4f", newellRatio),
+            "17_mesh_vs_newell": String(format: "%.4f", meshRatio),
+            "18_maxDepthMm": String(format: "%.2f", m.maxDepthMm),
+            "19_meanDepthMm": String(format: "%.2f", m.meanDepthMm),
+            "20_perimeterMm": String(format: "%.2f", m.perimeterMm),
+        ])
+    }
+
     // MARK: - Init
 
     init(

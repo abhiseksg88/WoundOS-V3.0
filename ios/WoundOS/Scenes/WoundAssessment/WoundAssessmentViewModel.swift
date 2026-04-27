@@ -264,6 +264,7 @@ final class WoundAssessmentViewModel: ObservableObject {
             capturedAt: scan.capturedAt,
             device: DevicePayload.current(),
             capturedBy: CapturedByPayload(from: user),
+            pushScore: Double(scan.pushScore.totalScore),
             notes: "",
             segmentation: SegmentationPayload(
                 confidence: 0.95,

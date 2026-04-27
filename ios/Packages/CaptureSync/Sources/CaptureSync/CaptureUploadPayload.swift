@@ -8,6 +8,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
     public let capturedAt: String
     public let device: DevicePayload
     public let capturedBy: CapturedByPayload
+    public let pushScore: Double?
     public let notes: String
     public let segmentation: SegmentationPayload
     public let measurements: MeasurementsPayload
@@ -20,6 +21,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
         case capturedAt = "captured_at"
         case device
         case capturedBy = "captured_by"
+        case pushScore = "push_score"
         case notes
         case segmentation
         case measurements
@@ -33,6 +35,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
         capturedAt: Date,
         device: DevicePayload,
         capturedBy: CapturedByPayload,
+        pushScore: Double? = nil,
         notes: String,
         segmentation: SegmentationPayload,
         measurements: MeasurementsPayload,
@@ -44,6 +47,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
         self.capturedAt = Self.formatDate(capturedAt)
         self.device = device
         self.capturedBy = capturedBy
+        self.pushScore = pushScore
         self.notes = String(notes.prefix(2000))
         self.segmentation = segmentation
         self.measurements = measurements
@@ -96,20 +100,24 @@ public struct DevicePayload: Codable, Sendable {
 public struct CapturedByPayload: Codable, Sendable {
     public let userId: String
     public let userName: String
+    public let role: String
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
         case userName = "user_name"
+        case role
     }
 
-    public init(userId: String, userName: String) {
+    public init(userId: String, userName: String, role: String = "nurse") {
         self.userId = userId
         self.userName = userName
+        self.role = role
     }
 
     public init(from user: VerifiedUser) {
         self.userId = user.userId
         self.userName = user.name
+        self.role = user.role
     }
 }
 
