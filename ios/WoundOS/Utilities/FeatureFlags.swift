@@ -44,6 +44,10 @@ public final class UserDefaultsFlagStore: FeatureFlagStore, @unchecked Sendable 
         defaults.register(defaults: [
             FeatureFlag.v5LidarCapture.rawValue: true,
             FeatureFlag.onDeviceSegmentation.rawValue: true,
+            FeatureFlag.clinicalDashboard.rawValue: true,
+            FeatureFlag.patientManagement.rawValue: true,
+            FeatureFlag.clinicalAssessment.rawValue: true,
+            FeatureFlag.manualMeasurements.rawValue: true,
         ])
     }
 
