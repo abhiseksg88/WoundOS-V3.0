@@ -53,8 +53,22 @@ final class MeasurementResultViewModel: ObservableObject {
 
     // MARK: - Formatted Values (matching screenshot style: value + unit separate)
 
+    var polygonAreaCm2: Double {
+        guard let pts3D = scan.nurseBoundary.projectedPoints3D, pts3D.count >= 3 else { return 0 }
+        var nx: Float = 0, ny: Float = 0, nz: Float = 0
+        for i in 0..<pts3D.count {
+            let c = pts3D[i]
+            let n = pts3D[(i + 1) % pts3D.count]
+            nx += (c.y - n.y) * (c.z + n.z)
+            ny += (c.z - n.z) * (c.x + n.x)
+            nz += (c.x - n.x) * (c.y + n.y)
+        }
+        let areaM2 = Double(sqrt(nx * nx + ny * ny + nz * nz)) / 2.0
+        return areaM2 * 10_000.0
+    }
+
     var areaValue: String {
-        String(format: "%.2f", scan.primaryMeasurement.areaCm2)
+        String(format: "%.2f", polygonAreaCm2)
     }
 
     var areaUnit: String { "cm²" }

@@ -110,23 +110,36 @@ public actor ClinicalPlatformClient {
         request.httpMethod = "POST"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 30
+        request.timeoutInterval = 60
+
+        logDiagnostic("[upload] URL: \(url.absoluteString)")
+        logDiagnostic("[upload] Auth: Bearer \(maskToken(token))")
 
         let body: Data
         do {
             body = try JSONEncoder().encode(payload)
         } catch {
+            logDiagnostic("[upload] Encode FAILED: \(error)")
             throw ClinicalPlatformError.decodingError("Failed to encode payload: \(error.localizedDescription)")
         }
         request.httpBody = body
+        logDiagnostic("[upload] Body size: \(body.count) bytes")
 
         let (data, response) = try await performRequest(request)
+
+        if let http = response as? HTTPURLResponse {
+            logDiagnostic("[upload] Status: \(http.statusCode)")
+            let bodyStr = String(data: data, encoding: .utf8) ?? "(non-UTF8, \(data.count) bytes)"
+            logDiagnostic("[upload] Response: \(bodyStr.prefix(500))")
+        }
+
         try validateResponse(response, data: data, context: "upload")
 
         let uploadResponse: CaptureUploadResponse
         do {
             uploadResponse = try JSONDecoder().decode(CaptureUploadResponse.self, from: data)
         } catch {
+            logDiagnostic("[upload] Decode FAILED: \(error)")
             throw ClinicalPlatformError.decodingError(error.localizedDescription)
         }
 

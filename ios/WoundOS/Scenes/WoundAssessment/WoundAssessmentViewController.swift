@@ -64,6 +64,8 @@ final class WoundAssessmentViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    private var saveButtonBottomConstraint: NSLayoutConstraint?
+
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
@@ -71,6 +73,7 @@ final class WoundAssessmentViewController: UIViewController {
         title = "Wound Assessment"
         setupUI()
         bindViewModel()
+        setupKeyboardObservers()
     }
 
     private func setupUI() {
@@ -78,6 +81,9 @@ final class WoundAssessmentViewController: UIViewController {
 
         view.addSubview(tableView)
         view.addSubview(saveButton)
+
+        let bottomConstraint = saveButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -WOSpacing.md)
+        saveButtonBottomConstraint = bottomConstraint
 
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -87,9 +93,36 @@ final class WoundAssessmentViewController: UIViewController {
 
             saveButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: WOSpacing.lg),
             saveButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -WOSpacing.lg),
-            saveButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -WOSpacing.md),
+            bottomConstraint,
             saveButton.heightAnchor.constraint(equalToConstant: 50),
         ])
+    }
+
+    private func setupKeyboardObservers() {
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillShow), name: UIResponder.keyboardWillShowNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide), name: UIResponder.keyboardWillHideNotification, object: nil)
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+    }
+
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+              let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else { return }
+        let keyboardHeight = frame.height - view.safeAreaInsets.bottom
+        saveButtonBottomConstraint?.constant = -WOSpacing.md - keyboardHeight
+        UIView.animate(withDuration: duration) { self.view.layoutIfNeeded() }
+    }
+
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        guard let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval else { return }
+        saveButtonBottomConstraint?.constant = -WOSpacing.md
+        UIView.animate(withDuration: duration) { self.view.layoutIfNeeded() }
+    }
+
+    @objc private func dismissKeyboard() {
+        view.endEditing(true)
     }
 
     private func bindViewModel() {

@@ -290,6 +290,10 @@ final class WoundAssessmentViewModel: ObservableObject {
         )
 
         do {
+            CrashLogger.shared.log(
+                "Replit upload starting — url=\(baseURL.absoluteString)/api/v1/captures, bodySize=\(rgbBase64.count) chars base64",
+                category: .network
+            )
             let result = try await clinicalPlatformClient.upload(payload: payload, token: token, baseURL: baseURL)
             CrashLogger.shared.log(
                 "Replit upload success — captureId=\(result.serverCaptureId), webUrl=\(result.webURL)",
@@ -298,11 +302,17 @@ final class WoundAssessmentViewModel: ObservableObject {
             return "Uploaded to Clinical Platform"
         } catch {
             CrashLogger.shared.log(
-                "Replit upload failed (non-blocking): \(error.localizedDescription)",
+                "Replit upload failed (non-blocking): \(error)",
                 category: .network,
                 level: .warning
             )
-            return "Upload failed — saved locally"
+            let shortError: String
+            if let cpError = error as? ClinicalPlatformError {
+                shortError = "\(cpError)"
+            } else {
+                shortError = error.localizedDescription
+            }
+            return "Upload failed: \(shortError.prefix(80))"
         }
     }
 }

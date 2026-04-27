@@ -162,6 +162,22 @@ final class PatientFormViewController: UIViewController {
     @objc private func mrnChanged() { viewModel.medicalRecordNumber = mrnField.text ?? "" }
     @objc private func roomChanged() { viewModel.roomNumber = roomField.text ?? "" }
     @objc private func dobChanged() { viewModel.dateOfBirth = dobPicker.date }
+
+    private func showRiskFactorsPicker() {
+        let picker = RiskFactorsPickerController(
+            selected: viewModel.selectedRiskFactors,
+            onDone: { [weak self] selected in
+                self?.viewModel.selectedRiskFactors = selected
+                self?.tableView.reloadSections(IndexSet(integer: Section.riskFactors.rawValue), with: .none)
+            }
+        )
+        let nav = UINavigationController(rootViewController: picker)
+        if let sheet = nav.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        present(nav, animated: true)
+    }
 }
 
 // MARK: - UITableViewDataSource
@@ -186,7 +202,7 @@ extension PatientFormViewController: UITableViewDataSource {
         case .name: return 2
         case .details: return 3
         case .insurance: return InsuranceType.allCases.count
-        case .riskFactors: return RiskFactor.allCases.count
+        case .riskFactors: return 1
         }
     }
 
@@ -264,13 +280,22 @@ extension PatientFormViewController: UITableViewDataSource {
 
         case .riskFactors:
             let cell = tableView.dequeueReusableCell(withIdentifier: "RiskFactorCell", for: indexPath)
-            let factor = RiskFactor.allCases[indexPath.row]
             var config = cell.defaultContentConfiguration()
-            config.text = factor.displayName
+            let selected = viewModel.selectedRiskFactors
+            if selected.isEmpty {
+                config.text = "Select Risk Factors"
+                config.textProperties.color = WOColors.tertiaryText
+            } else {
+                config.text = selected.map(\.displayName).sorted().joined(separator: ", ")
+                config.textProperties.color = WOColors.primaryText
+            }
             config.textProperties.font = WOFonts.body
+            config.secondaryText = "\(selected.count) selected"
+            config.secondaryTextProperties.font = WOFonts.footnote
+            config.secondaryTextProperties.color = WOColors.secondaryText
             cell.contentConfiguration = config
             cell.backgroundColor = WOColors.cardBackground
-            cell.accessoryType = viewModel.selectedRiskFactors.contains(factor) ? .checkmark : .none
+            cell.accessoryType = .disclosureIndicator
             return cell
         }
     }
@@ -289,12 +314,66 @@ extension PatientFormViewController: UITableViewDelegate {
             tableView.reloadSections(IndexSet(integer: indexPath.section), with: .none)
 
         case .riskFactors:
-            let factor = RiskFactor.allCases[indexPath.row]
-            viewModel.toggleRiskFactor(factor)
-            tableView.reloadRows(at: [indexPath], with: .none)
+            showRiskFactorsPicker()
 
         default:
             break
         }
+    }
+}
+
+// MARK: - Risk Factors Picker (Half-Sheet)
+
+final class RiskFactorsPickerController: UITableViewController {
+
+    private var selected: Set<RiskFactor>
+    private let onDone: (Set<RiskFactor>) -> Void
+
+    init(selected: Set<RiskFactor>, onDone: @escaping (Set<RiskFactor>) -> Void) {
+        self.selected = selected
+        self.onDone = onDone
+        super.init(style: .insetGrouped)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Risk Factors"
+        view.backgroundColor = WOColors.screenBackground
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "Cell")
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
+    }
+
+    @objc private func doneTapped() {
+        onDone(selected)
+        dismiss(animated: true)
+    }
+
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        RiskFactor.allCases.count
+    }
+
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
+        let factor = RiskFactor.allCases[indexPath.row]
+        var config = cell.defaultContentConfiguration()
+        config.text = factor.displayName
+        config.textProperties.font = WOFonts.body
+        cell.contentConfiguration = config
+        cell.backgroundColor = WOColors.cardBackground
+        cell.accessoryType = selected.contains(factor) ? .checkmark : .none
+        return cell
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let factor = RiskFactor.allCases[indexPath.row]
+        if selected.contains(factor) {
+            selected.remove(factor)
+        } else {
+            selected.insert(factor)
+        }
+        tableView.reloadRows(at: [indexPath], with: .none)
     }
 }

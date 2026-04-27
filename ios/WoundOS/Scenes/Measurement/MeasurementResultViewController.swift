@@ -230,43 +230,17 @@ final class MeasurementResultViewController: UIViewController {
         measurementStack.addArrangedSubview(
             WOMeasurementRow(label: "Area", value: viewModel.areaValue, unit: viewModel.areaUnit))
         measurementStack.addArrangedSubview(
-            WOMeasurementRow(label: "Circumference", value: viewModel.perimeterValue, unit: viewModel.perimeterUnit))
-        measurementStack.addArrangedSubview(
             WOMeasurementRow(label: "Length", value: viewModel.lengthValue, unit: viewModel.lengthUnit))
         measurementStack.addArrangedSubview(
-            WOMeasurementRow(label: "Width", value: viewModel.widthValue, unit: viewModel.widthUnit, showSeparator: false))
+            WOMeasurementRow(label: "Width", value: viewModel.widthValue, unit: viewModel.widthUnit))
+        measurementStack.addArrangedSubview(
+            WOMeasurementRow(label: "Depth", value: viewModel.maxDepthValue, unit: viewModel.maxDepthUnit, showSeparator: false))
 
         let cardWrapper = wrapInPadding(measurementCard, horizontal: WOSpacing.lg)
         contentStack.addArrangedSubview(cardWrapper)
         contentStack.addArrangedSubview(makeSpacer(WOSpacing.sectionSpacing))
 
-        // === Depth Section ===
-        contentStack.addArrangedSubview(WOSectionHeader(title: "Depth"))
-
-        let depthCard = WOCardView()
-        depthCard.translatesAutoresizingMaskIntoConstraints = false
-
-        let depthStack = UIStackView()
-        depthStack.axis = .vertical
-        depthStack.translatesAutoresizingMaskIntoConstraints = false
-        depthCard.addSubview(depthStack)
-
-        NSLayoutConstraint.activate([
-            depthStack.topAnchor.constraint(equalTo: depthCard.topAnchor),
-            depthStack.leadingAnchor.constraint(equalTo: depthCard.leadingAnchor),
-            depthStack.trailingAnchor.constraint(equalTo: depthCard.trailingAnchor),
-            depthStack.bottomAnchor.constraint(equalTo: depthCard.bottomAnchor),
-        ])
-
-        depthStack.addArrangedSubview(
-            WOMeasurementRow(label: "Max Depth", value: viewModel.maxDepthValue, unit: viewModel.maxDepthUnit))
-        depthStack.addArrangedSubview(
-            WOMeasurementRow(label: "Mean Depth", value: viewModel.meanDepthValue, unit: viewModel.meanDepthUnit))
-        depthStack.addArrangedSubview(
-            WOMeasurementRow(label: "Volume", value: viewModel.volumeValue, unit: viewModel.volumeUnit, showSeparator: false))
-
-        contentStack.addArrangedSubview(wrapInPadding(depthCard, horizontal: WOSpacing.lg))
-        contentStack.addArrangedSubview(makeSpacer(WOSpacing.sectionSpacing))
+        // Depth section removed — Area/Volume/Mean Depth calculations under investigation
 
         // === PUSH Score Section ===
         contentStack.addArrangedSubview(WOSectionHeader(title: "PUSH Score 3.0"))
