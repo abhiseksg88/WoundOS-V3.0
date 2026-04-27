@@ -182,7 +182,9 @@ extension DashboardViewController: UITableViewDataSource {
         ) as? PatientCell else {
             return UITableViewCell()
         }
-        cell.configure(with: viewModel.recentPatients[indexPath.row])
+        let patient = viewModel.recentPatients[indexPath.row]
+        let woundCount = viewModel.woundCounts[patient.id] ?? 0
+        cell.configure(with: patient, woundCount: woundCount)
         return cell
     }
 }

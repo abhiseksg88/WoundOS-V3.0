@@ -1,3 +1,4 @@
+import UIKit
 import Foundation
 import Combine
 import WoundCore
@@ -185,10 +186,14 @@ final class WoundAssessmentViewModel: ObservableObject {
                     category: .storage
                 )
 
-                await self.uploadToReplit(scan: updatedScan, manualMeasurements: manualMeasurements, verifiedUser: verifiedUser)
+                let uploadMsg = await self.uploadToReplit(scan: updatedScan, manualMeasurements: manualMeasurements, verifiedUser: verifiedUser)
 
                 isSaving = false
                 onAssessmentComplete?(assessment)
+
+                if let msg = uploadMsg {
+                    showToast(msg)
+                }
             } catch {
                 self.error = error.localizedDescription
                 isSaving = false
@@ -198,13 +203,48 @@ final class WoundAssessmentViewModel: ObservableObject {
 
     // MARK: - Replit Upload
 
-    private func uploadToReplit(scan: WoundScan, manualMeasurements: ManualMeasurements?, verifiedUser: VerifiedUser?) async {
+    private func showToast(_ message: String) {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = scene.windows.first(where: { $0.isKeyWindow }) else { return }
+
+        let toast = UILabel()
+        toast.text = message
+        toast.font = WOFonts.subheadline
+        toast.textColor = .white
+        toast.backgroundColor = UIColor.black.withAlphaComponent(0.8)
+        toast.textAlignment = .center
+        toast.numberOfLines = 2
+        toast.layer.cornerRadius = 12
+        toast.layer.cornerCurve = .continuous
+        toast.clipsToBounds = true
+        toast.translatesAutoresizingMaskIntoConstraints = false
+        toast.alpha = 0
+
+        window.addSubview(toast)
+        NSLayoutConstraint.activate([
+            toast.centerXAnchor.constraint(equalTo: window.centerXAnchor),
+            toast.bottomAnchor.constraint(equalTo: window.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+            toast.leadingAnchor.constraint(greaterThanOrEqualTo: window.leadingAnchor, constant: 24),
+            toast.trailingAnchor.constraint(lessThanOrEqualTo: window.trailingAnchor, constant: -24),
+            toast.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+        ])
+
+        UIView.animate(withDuration: 0.3) { toast.alpha = 1 }
+        UIView.animate(withDuration: 0.3, delay: 3.0) {
+            toast.alpha = 0
+        } completion: { _ in
+            toast.removeFromSuperview()
+        }
+    }
+
+    @MainActor
+    private func uploadToReplit(scan: WoundScan, manualMeasurements: ManualMeasurements?, verifiedUser: VerifiedUser?) async -> String? {
         guard let token = tokenStore.loadToken(),
               let baseURLString = tokenStore.loadBaseURL(),
               let baseURL = URL(string: baseURLString),
               let user = verifiedUser else {
             CrashLogger.shared.log("Replit upload skipped — no token configured", category: .network)
-            return
+            return nil
         }
 
         let m = scan.primaryMeasurement
@@ -255,12 +295,14 @@ final class WoundAssessmentViewModel: ObservableObject {
                 "Replit upload success — captureId=\(result.serverCaptureId), webUrl=\(result.webURL)",
                 category: .network
             )
+            return "Uploaded to Clinical Platform"
         } catch {
             CrashLogger.shared.log(
                 "Replit upload failed (non-blocking): \(error.localizedDescription)",
                 category: .network,
                 level: .warning
             )
+            return "Upload failed — saved locally"
         }
     }
 }

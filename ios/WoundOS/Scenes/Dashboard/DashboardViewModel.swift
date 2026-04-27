@@ -20,6 +20,7 @@ final class DashboardViewModel: ObservableObject {
 
     @Published var summary = TodaySummary()
     @Published var recentPatients: [Patient] = []
+    @Published var woundCounts: [UUID: Int] = [:]
     @Published var incompleteEncounters: [Encounter] = []
     @Published var isLoading = false
 
@@ -48,6 +49,13 @@ final class DashboardViewModel: ObservableObject {
             do {
                 let patients = try await clinicalStorage.fetchAllPatients()
                 recentPatients = Array(patients.prefix(10))
+
+                var counts: [UUID: Int] = [:]
+                for patient in recentPatients {
+                    let wounds = (try? await clinicalStorage.fetchWounds(patientId: patient.id)) ?? []
+                    counts[patient.id] = wounds.filter { !$0.isHealed }.count
+                }
+                woundCounts = counts
 
                 let todayEncounters = try await clinicalStorage.fetchTodaysEncounters()
                 let incomplete = try await clinicalStorage.fetchIncompleteEncounters()
