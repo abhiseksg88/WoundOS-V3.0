@@ -9,6 +9,20 @@
 /* Begin PBXBuildFile section */
 		242974312F96D496001E05D8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2442EF462F96D123001F449F /* Assets.xcassets */; };
 		242974332F97106A001E05D8 /* ImageViewGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242974322F97106A001E05D8 /* ImageViewGeometry.swift */; };
+		248134532F9DF035004B375A /* WoundClinical in Frameworks */ = {isa = PBXBuildFile; productRef = 248134522F9DF035004B375A /* WoundClinical */; };
+		248134592F9DF097004B375A /* PatientCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134582F9DF097004B375A /* PatientCoordinator.swift */; };
+		2481345B2F9DF097004B375A /* PatientListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481345A2F9DF097004B375A /* PatientListViewModel.swift */; };
+		2481345D2F9DF0C5004B375A /* PatientCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481345C2F9DF0C5004B375A /* PatientCell.swift */; };
+		2481345F2F9DF0C5004B375A /* PatientListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481345E2F9DF0C5004B375A /* PatientListViewController.swift */; };
+		248134612F9DF0DC004B375A /* PatientDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134602F9DF0DC004B375A /* PatientDetailViewModel.swift */; };
+		248134632F9DF0DC004B375A /* WoundSummaryCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134622F9DF0DC004B375A /* WoundSummaryCell.swift */; };
+		248134652F9DF103004B375A /* PatientDetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134642F9DF103004B375A /* PatientDetailViewController.swift */; };
+		248134672F9DF103004B375A /* PatientFormViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134662F9DF103004B375A /* PatientFormViewModel.swift */; };
+		248134692F9DF128004B375A /* PatientFormViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134682F9DF128004B375A /* PatientFormViewController.swift */; };
+		2481346B2F9DF149004B375A /* DashboardCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481346A2F9DF149004B375A /* DashboardCoordinator.swift */; };
+		2481346D2F9DF149004B375A /* SettingsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481346C2F9DF149004B375A /* SettingsCoordinator.swift */; };
+		2481346F2F9DF172004B375A /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481346E2F9DF172004B375A /* DashboardViewModel.swift */; };
+		248134712F9DF172004B375A /* DashboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134702F9DF172004B375A /* DashboardViewController.swift */; };
 		249019E32F98790D006CFC7B /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019E22F98790D006CFC7B /* FeatureFlags.swift */; };
 		249019E62F9879E9006CFC7B /* V5CaptureViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019E52F9879E9006CFC7B /* V5CaptureViewModel.swift */; };
 		249019E82F9879F7006CFC7B /* V5CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019E72F9879F7006CFC7B /* V5CaptureView.swift */; };
@@ -31,6 +45,7 @@
 		24901A0D2F9B2444006CFC7B /* CaptureSync in Frameworks */ = {isa = PBXBuildFile; productRef = 24901A0C2F9B2444006CFC7B /* CaptureSync */; };
 		24901A122F9B2797006CFC7B /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24901A112F9B2797006CFC7B /* SettingsViewController.swift */; };
 		24901A142F9B2797006CFC7B /* ClinicalPlatformSettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24901A132F9B2797006CFC7B /* ClinicalPlatformSettingsViewController.swift */; };
+		24901A162F9DDFAE006CFC7B /* LocalClinicalStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24901A152F9DDFAE006CFC7B /* LocalClinicalStorage.swift */; };
 		249403B82F972F9F000FB77F /* CrashLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249403B72F972F9F000FB77F /* CrashLogger.swift */; };
 		BBBB00000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000001 /* AppDelegate.swift */; };
 		BBBB00000000000000000002 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAA00000000000000000002 /* DependencyContainer.swift */; };
@@ -63,6 +78,19 @@
 /* Begin PBXFileReference section */
 		242974322F97106A001E05D8 /* ImageViewGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewGeometry.swift; sourceTree = "<group>"; };
 		2442EF462F96D123001F449F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		248134582F9DF097004B375A /* PatientCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatientCoordinator.swift; sourceTree = "<group>"; };
+		2481345A2F9DF097004B375A /* PatientListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatientListViewModel.swift; sourceTree = "<group>"; };
+		2481345C2F9DF0C5004B375A /* PatientCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatientCell.swift; sourceTree = "<group>"; };
+		2481345E2F9DF0C5004B375A /* PatientListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatientListViewController.swift; sourceTree = "<group>"; };
+		248134602F9DF0DC004B375A /* PatientDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatientDetailViewModel.swift; sourceTree = "<group>"; };
+		248134622F9DF0DC004B375A /* WoundSummaryCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WoundSummaryCell.swift; sourceTree = "<group>"; };
+		248134642F9DF103004B375A /* PatientDetailViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatientDetailViewController.swift; sourceTree = "<group>"; };
+		248134662F9DF103004B375A /* PatientFormViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatientFormViewModel.swift; sourceTree = "<group>"; };
+		248134682F9DF128004B375A /* PatientFormViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatientFormViewController.swift; sourceTree = "<group>"; };
+		2481346A2F9DF149004B375A /* DashboardCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardCoordinator.swift; sourceTree = "<group>"; };
+		2481346C2F9DF149004B375A /* SettingsCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCoordinator.swift; sourceTree = "<group>"; };
+		2481346E2F9DF172004B375A /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
+		248134702F9DF172004B375A /* DashboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewController.swift; sourceTree = "<group>"; };
 		249019E22F98790D006CFC7B /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
 		249019E52F9879E9006CFC7B /* V5CaptureViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V5CaptureViewModel.swift; sourceTree = "<group>"; };
 		249019E72F9879F7006CFC7B /* V5CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V5CaptureView.swift; sourceTree = "<group>"; };
@@ -84,6 +112,7 @@
 		24901A092F99E7CB006CFC7B /* BrandedNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandedNavigationController.swift; sourceTree = "<group>"; };
 		24901A112F9B2797006CFC7B /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
 		24901A132F9B2797006CFC7B /* ClinicalPlatformSettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalPlatformSettingsViewController.swift; sourceTree = "<group>"; };
+		24901A152F9DDFAE006CFC7B /* LocalClinicalStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalClinicalStorage.swift; sourceTree = "<group>"; };
 		249403B72F972F9F000FB77F /* CrashLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashLogger.swift; sourceTree = "<group>"; };
 		AAAA00000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		AAAA00000000000000000002 /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DependencyContainer.swift; sourceTree = "<group>"; };
@@ -115,6 +144,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				24901A0D2F9B2444006CFC7B /* CaptureSync in Frameworks */,
+				248134532F9DF035004B375A /* WoundClinical in Frameworks */,
 				BBBB00000000000000000101 /* WoundCore in Frameworks */,
 				BBBB00000000000000000102 /* WoundCapture in Frameworks */,
 				BBBB00000000000000000103 /* WoundBoundary in Frameworks */,
@@ -127,6 +157,44 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		248134542F9DF083004B375A /* PatientList */ = {
+			isa = PBXGroup;
+			children = (
+				2481345A2F9DF097004B375A /* PatientListViewModel.swift */,
+				2481345C2F9DF0C5004B375A /* PatientCell.swift */,
+				2481345E2F9DF0C5004B375A /* PatientListViewController.swift */,
+			);
+			path = PatientList;
+			sourceTree = "<group>";
+		};
+		248134552F9DF083004B375A /* PatientDetail */ = {
+			isa = PBXGroup;
+			children = (
+				248134602F9DF0DC004B375A /* PatientDetailViewModel.swift */,
+				248134622F9DF0DC004B375A /* WoundSummaryCell.swift */,
+				248134642F9DF103004B375A /* PatientDetailViewController.swift */,
+			);
+			path = PatientDetail;
+			sourceTree = "<group>";
+		};
+		248134562F9DF084004B375A /* PatientForm */ = {
+			isa = PBXGroup;
+			children = (
+				248134662F9DF103004B375A /* PatientFormViewModel.swift */,
+				248134682F9DF128004B375A /* PatientFormViewController.swift */,
+			);
+			path = PatientForm;
+			sourceTree = "<group>";
+		};
+		248134572F9DF084004B375A /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				2481346E2F9DF172004B375A /* DashboardViewModel.swift */,
+				248134702F9DF172004B375A /* DashboardViewController.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
 		249019E42F9879D4006CFC7B /* V5Capture */ = {
 			isa = PBXGroup;
 			children = (
@@ -149,6 +217,7 @@
 			children = (
 				249019F82F987A42006CFC7B /* CaptureBundleEntity.swift */,
 				249019FA2F987A42006CFC7B /* SwiftDataCaptureBundleStore.swift */,
+				24901A152F9DDFAE006CFC7B /* LocalClinicalStorage.swift */,
 			);
 			path = Storage;
 			sourceTree = "<group>";
@@ -223,6 +292,9 @@
 				AAAA00000000000000000005 /* CaptureCoordinator.swift */,
 				AAAA00000000000000000006 /* Coordinator.swift */,
 				AAAA00000000000000000007 /* ScanListCoordinator.swift */,
+				248134582F9DF097004B375A /* PatientCoordinator.swift */,
+				2481346A2F9DF149004B375A /* DashboardCoordinator.swift */,
+				2481346C2F9DF149004B375A /* SettingsCoordinator.swift */,
 			);
 			path = Coordinators;
 			sourceTree = "<group>";
@@ -238,6 +310,10 @@
 				249019E42F9879D4006CFC7B /* V5Capture */,
 				24901A022F99C66B006CFC7B /* Debug */,
 				24901A102F9B2758006CFC7B /* Settings */,
+				248134542F9DF083004B375A /* PatientList */,
+				248134552F9DF083004B375A /* PatientDetail */,
+				248134562F9DF084004B375A /* PatientForm */,
+				248134572F9DF084004B375A /* Dashboard */,
 			);
 			path = Scenes;
 			sourceTree = "<group>";
@@ -339,6 +415,7 @@
 				444400000000000000000005 /* WoundNetworking */,
 				444400000000000000000006 /* WoundAutoSegmentation */,
 				24901A0C2F9B2444006CFC7B /* CaptureSync */,
+				248134522F9DF035004B375A /* WoundClinical */,
 			);
 			productName = WoundOS;
 			productReference = AAAA00000000000000000022 /* WoundOS.app */;
@@ -376,6 +453,7 @@
 				333300000000000000000005 /* XCLocalSwiftPackageReference "Packages/WoundNetworking" */,
 				333300000000000000000006 /* XCLocalSwiftPackageReference "Packages/WoundAutoSegmentation" */,
 				24901A0B2F9B2444006CFC7B /* XCLocalSwiftPackageReference "Packages/CaptureSync" */,
+				248134512F9DF035004B375A /* XCLocalSwiftPackageReference "Packages/WoundClinical" */,
 			);
 			productRefGroup = CCCC00000000000000000013 /* Products */;
 			projectDirPath = "";
@@ -407,6 +485,7 @@
 				BBBB00000000000000000001 /* AppDelegate.swift in Sources */,
 				BBBB00000000000000000002 /* DependencyContainer.swift in Sources */,
 				249019EA2F987A10006CFC7B /* ARViewRepresentable.swift in Sources */,
+				248134632F9DF0DC004B375A /* WoundSummaryCell.swift in Sources */,
 				BBBB00000000000000000003 /* SceneDelegate.swift in Sources */,
 				BBBB00000000000000000004 /* AppCoordinator.swift in Sources */,
 				242974332F97106A001E05D8 /* ImageViewGeometry.swift in Sources */,
@@ -417,19 +496,30 @@
 				BBBB00000000000000000008 /* BoundaryDrawingViewController.swift in Sources */,
 				BBBB00000000000000000009 /* BoundaryDrawingViewModel.swift in Sources */,
 				24901A142F9B2797006CFC7B /* ClinicalPlatformSettingsViewController.swift in Sources */,
+				248134712F9DF172004B375A /* DashboardViewController.swift in Sources */,
 				BBBB00000000000000000010 /* CaptureViewController.swift in Sources */,
 				BBBB00000000000000000011 /* CaptureViewModel.swift in Sources */,
 				24901A012F99C61B006CFC7B /* WoundTypeOverride.swift in Sources */,
+				248134692F9DF128004B375A /* PatientFormViewController.swift in Sources */,
 				24901A042F99C694006CFC7B /* SegmenterDebugViewController.swift in Sources */,
+				248134672F9DF103004B375A /* PatientFormViewModel.swift in Sources */,
 				BBBB00000000000000000012 /* MeasurementResultViewController.swift in Sources */,
+				2481345D2F9DF0C5004B375A /* PatientCell.swift in Sources */,
 				249019E32F98790D006CFC7B /* FeatureFlags.swift in Sources */,
+				2481346B2F9DF149004B375A /* DashboardCoordinator.swift in Sources */,
+				2481345F2F9DF0C5004B375A /* PatientListViewController.swift in Sources */,
+				2481346F2F9DF172004B375A /* DashboardViewModel.swift in Sources */,
 				249019F42F987A21006CFC7B /* GuidanceCardView.swift in Sources */,
+				2481345B2F9DF097004B375A /* PatientListViewModel.swift in Sources */,
 				249019E62F9879E9006CFC7B /* V5CaptureViewModel.swift in Sources */,
 				249019EC2F987A10006CFC7B /* DistanceRingView.swift in Sources */,
+				248134652F9DF103004B375A /* PatientDetailViewController.swift in Sources */,
 				249019EE2F987A11006CFC7B /* TrackingIndicatorView.swift in Sources */,
+				248134592F9DF097004B375A /* PatientCoordinator.swift in Sources */,
 				249019E82F9879F7006CFC7B /* V5CaptureView.swift in Sources */,
 				249019F62F987A22006CFC7B /* V5CaptureHostingController.swift in Sources */,
 				24901A0A2F99E7CB006CFC7B /* BrandedNavigationController.swift in Sources */,
+				24901A162F9DDFAE006CFC7B /* LocalClinicalStorage.swift in Sources */,
 				BBBB00000000000000000013 /* MeasurementResultViewModel.swift in Sources */,
 				249019F92F987A42006CFC7B /* CaptureBundleEntity.swift in Sources */,
 				BBBB00000000000000000014 /* ScanDetailViewController.swift in Sources */,
@@ -441,6 +531,8 @@
 				24901A062F99CE82006CFC7B /* DeveloperMode.swift in Sources */,
 				BBBB00000000000000000018 /* ScanListViewModel.swift in Sources */,
 				249403B82F972F9F000FB77F /* CrashLogger.swift in Sources */,
+				248134612F9DF0DC004B375A /* PatientDetailViewModel.swift in Sources */,
+				2481346D2F9DF149004B375A /* SettingsCoordinator.swift in Sources */,
 				249019FF2F99C5F3006CFC7B /* SegmentationErrorMessages.swift in Sources */,
 				BBBB00000000000000000019 /* HealthStyleComponents.swift in Sources */,
 				249019FB2F987A42006CFC7B /* SwiftDataCaptureBundleStore.swift in Sources */,
@@ -457,7 +549,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = 829CPR87G4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
@@ -485,7 +577,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEVELOPMENT_TEAM = 829CPR87G4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
@@ -652,6 +744,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		248134512F9DF035004B375A /* XCLocalSwiftPackageReference "Packages/WoundClinical" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WoundClinical;
+		};
 		24901A0B2F9B2444006CFC7B /* XCLocalSwiftPackageReference "Packages/CaptureSync" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/CaptureSync;
@@ -683,6 +779,10 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		248134522F9DF035004B375A /* WoundClinical */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WoundClinical;
+		};
 		24901A0C2F9B2444006CFC7B /* CaptureSync */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CaptureSync;

@@ -60,6 +60,17 @@ public struct WoundScan: Codable, Sendable, Identifiable {
     /// Upload status
     public var uploadStatus: UploadStatus
 
+    // MARK: - Clinical Platform fields (Phase 5)
+
+    /// Link to Wound entity in WoundClinical (nil for legacy scans)
+    public var woundId: UUID?
+
+    /// Link to Encounter entity in WoundClinical (nil for legacy scans)
+    public var encounterId: UUID?
+
+    /// Denormalized display string, e.g. "Left Heel" (nil for legacy scans)
+    public var anatomicalLocation: String?
+
     public init(
         id: UUID = UUID(),
         patientId: String,
@@ -76,7 +87,10 @@ public struct WoundScan: Codable, Sendable, Identifiable {
         reviewStatus: ReviewStatus = ReviewStatus(),
         fwaSignals: FWASignal? = nil,
         clinicalSummary: ClinicalSummary? = nil,
-        uploadStatus: UploadStatus = .pending
+        uploadStatus: UploadStatus = .pending,
+        woundId: UUID? = nil,
+        encounterId: UUID? = nil,
+        anatomicalLocation: String? = nil
     ) {
         self.id = id
         self.patientId = patientId
@@ -94,6 +108,9 @@ public struct WoundScan: Codable, Sendable, Identifiable {
         self.fwaSignals = fwaSignals
         self.clinicalSummary = clinicalSummary
         self.uploadStatus = uploadStatus
+        self.woundId = woundId
+        self.encounterId = encounterId
+        self.anatomicalLocation = anatomicalLocation
     }
 }
 

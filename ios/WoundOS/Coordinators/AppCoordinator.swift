@@ -1,4 +1,5 @@
 import UIKit
+import WoundClinical
 
 // MARK: - App Coordinator
 
@@ -15,10 +16,28 @@ final class AppCoordinator: Coordinator {
     }
 
     func start() {
-        CrashLogger.shared.log("AppCoordinator.start() — building tab bar", category: .coordinator)
+        let useClinicalLayout = FeatureFlags.isEnabled(.clinicalDashboard)
+        CrashLogger.shared.log(
+            "AppCoordinator.start() — \(useClinicalLayout ? "4-tab clinical" : "2-tab legacy") layout",
+            category: .coordinator
+        )
+
         let tabBarController = UITabBarController()
 
-        // Tab 1: Scan List (patient scan history)
+        if useClinicalLayout {
+            tabBarController.viewControllers = buildClinicalTabs()
+        } else {
+            tabBarController.viewControllers = buildLegacyTabs()
+        }
+
+        tabBarController.selectedIndex = 0
+        navigationController.setNavigationBarHidden(true, animated: false)
+        navigationController.setViewControllers([tabBarController], animated: false)
+    }
+
+    // MARK: - Legacy 2-Tab Layout
+
+    private func buildLegacyTabs() -> [UIViewController] {
         let scanListNav = BrandedNavigationController()
         scanListNav.tabBarItem = UITabBarItem(
             title: "Scans",
@@ -32,7 +51,6 @@ final class AppCoordinator: Coordinator {
         addChild(scanListCoordinator)
         scanListCoordinator.start()
 
-        // Tab 2: New Capture
         let captureNav = BrandedNavigationController()
         captureNav.tabBarItem = UITabBarItem(
             title: "Capture",
@@ -46,10 +64,68 @@ final class AppCoordinator: Coordinator {
         addChild(captureCoordinator)
         captureCoordinator.start()
 
-        tabBarController.viewControllers = [scanListNav, captureNav]
-        tabBarController.selectedIndex = 0
+        return [scanListNav, captureNav]
+    }
 
-        navigationController.setNavigationBarHidden(true, animated: false)
-        navigationController.setViewControllers([tabBarController], animated: false)
+    // MARK: - Clinical 4-Tab Layout
+
+    private func buildClinicalTabs() -> [UIViewController] {
+        // Tab 1: Home Dashboard
+        let homeNav = BrandedNavigationController()
+        homeNav.tabBarItem = UITabBarItem(
+            title: "Home",
+            image: UIImage(systemName: "house.fill"),
+            tag: 0
+        )
+        let dashboardCoordinator = DashboardCoordinator(
+            navigationController: homeNav,
+            dependencies: dependencies
+        )
+        addChild(dashboardCoordinator)
+        dashboardCoordinator.start()
+
+        // Tab 2: Patients
+        let patientsNav = BrandedNavigationController()
+        patientsNav.tabBarItem = UITabBarItem(
+            title: "Patients",
+            image: UIImage(systemName: "person.2.fill"),
+            tag: 1
+        )
+        let patientCoordinator = PatientCoordinator(
+            navigationController: patientsNav,
+            dependencies: dependencies
+        )
+        addChild(patientCoordinator)
+        patientCoordinator.start()
+
+        // Tab 3: Capture
+        let captureNav = BrandedNavigationController()
+        captureNav.tabBarItem = UITabBarItem(
+            title: "Capture",
+            image: UIImage(systemName: "camera.viewfinder"),
+            tag: 2
+        )
+        let captureCoordinator = CaptureCoordinator(
+            navigationController: captureNav,
+            dependencies: dependencies
+        )
+        addChild(captureCoordinator)
+        captureCoordinator.start()
+
+        // Tab 4: Settings
+        let settingsNav = BrandedNavigationController()
+        settingsNav.tabBarItem = UITabBarItem(
+            title: "Settings",
+            image: UIImage(systemName: "gearshape.fill"),
+            tag: 3
+        )
+        let settingsCoordinator = SettingsCoordinator(
+            navigationController: settingsNav,
+            dependencies: dependencies
+        )
+        addChild(settingsCoordinator)
+        settingsCoordinator.start()
+
+        return [homeNav, patientsNav, captureNav, settingsNav]
     }
 }

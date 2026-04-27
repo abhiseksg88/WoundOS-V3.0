@@ -11,6 +11,14 @@ public enum FeatureFlag: String, CaseIterable, Sendable {
     case scanMode             = "v5_scan_mode_enabled"
     case medgemmaNarrative    = "v5_medgemma_narrative_enabled"
     case healthkitSync        = "v5_healthkit_sync_enabled"
+
+    // V6 — Clinical Documentation Platform
+    case clinicalDashboard    = "v6_clinical_dashboard_enabled"
+    case patientManagement    = "v6_patient_management_enabled"
+    case clinicalAssessment   = "v6_clinical_assessment_enabled"
+    case aiClinicalNotes      = "v6_ai_clinical_notes_enabled"
+    case billingCompliance    = "v6_billing_compliance_enabled"
+    case manualMeasurements   = "v6_manual_measurements_enabled"
 }
 
 // MARK: - Abstract Store Protocol

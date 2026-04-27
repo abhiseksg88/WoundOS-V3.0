@@ -6,6 +6,7 @@ import WoundMeasurement
 import WoundNetworking
 import WoundAutoSegmentation
 import CaptureSync
+import WoundClinical
 
 // MARK: - Dependency Container
 
@@ -157,6 +158,21 @@ final class DependencyContainer {
 
     lazy var localStorage: StorageProviderProtocol = {
         LocalScanStorage()
+    }()
+
+    // MARK: - Clinical Platform (V6)
+
+    lazy var clinicalStorage: ClinicalStorageProvider = {
+        CrashLogger.shared.log("Initializing LocalClinicalStorage", category: .storage)
+        return LocalClinicalStorage()
+    }()
+
+    lazy var cptCodeEngine: CPTCodeEngine = {
+        CPTCodeEngine()
+    }()
+
+    lazy var cmsComplianceChecker: CMSComplianceChecker = {
+        CMSComplianceChecker()
     }()
 }
 
