@@ -254,9 +254,32 @@ final class ClinicalPlatformSettingsViewController: UIViewController {
         statusLabel.text = "Testing connection..."
         statusDetailLabel.text = nil
 
-        CrashLogger.shared.log("Testing Clinical Platform connection", category: .network)
+        let maskedToken: String = {
+            guard token.count > 10 else { return "***" }
+            return "\(token.prefix(6))...\(token.suffix(4))"
+        }()
+        CrashLogger.shared.log(
+            "Testing Clinical Platform: URL=\(urlString), token=\(maskedToken)",
+            category: .network
+        )
+
+        var diagnosticObserver: Any?
+        diagnosticObserver = NotificationCenter.default.addObserver(
+            forName: .clinicalPlatformDiagnostic,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let msg = notification.userInfo?["message"] as? String {
+                CrashLogger.shared.log("CPX-DIAG: \(msg)", category: .network)
+            }
+        }
 
         Task {
+            defer {
+                if let obs = diagnosticObserver {
+                    NotificationCenter.default.removeObserver(obs)
+                }
+            }
             do {
                 let user = try await client.verify(token: token, baseURL: baseURL)
 
@@ -289,18 +312,31 @@ final class ClinicalPlatformSettingsViewController: UIViewController {
 
                     switch error {
                     case .unauthorized:
-                        showErrorState(message: "Invalid or expired token")
-                    case .networkError:
-                        showErrorState(message: "Could not reach server")
+                        showErrorState(message: "Token is invalid or expired. Please verify and re-paste.")
+                    case .networkError(let detail):
+                        if detail.contains("not found") || detail.contains("Endpoint") {
+                            showErrorState(message: "Endpoint not found. Check API Base URL.")
+                        } else {
+                            showErrorState(message: "Could not reach server: \(detail)")
+                        }
+                    case .serverError(let code, _):
+                        showErrorState(message: "Server error (\(code)). Try again.")
+                    case .decodingError(let detail):
+                        showErrorState(message: "Could not parse server response: \(detail)")
                     default:
                         showErrorState(message: error.localizedDescription)
                     }
                 }
             } catch {
+                CrashLogger.shared.log(
+                    "Clinical Platform unexpected error: \(error)",
+                    category: .network,
+                    level: .warning
+                )
                 await MainActor.run {
                     activityIndicator.stopAnimating()
                     testConnectionButton.isEnabled = true
-                    showErrorState(message: "Could not reach server: \(error.localizedDescription)")
+                    showErrorState(message: "Unexpected error: \(error.localizedDescription)")
                 }
             }
         }

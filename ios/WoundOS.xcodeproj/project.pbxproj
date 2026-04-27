@@ -23,6 +23,9 @@
 		2481346D2F9DF149004B375A /* SettingsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481346C2F9DF149004B375A /* SettingsCoordinator.swift */; };
 		2481346F2F9DF172004B375A /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481346E2F9DF172004B375A /* DashboardViewModel.swift */; };
 		248134712F9DF172004B375A /* DashboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134702F9DF172004B375A /* DashboardViewController.swift */; };
+		248134752F9F004B004B375A /* WoundAssessmentViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134742F9F004B004B375A /* WoundAssessmentViewModel.swift */; };
+		248134772F9F0085004B375A /* WoundAssessmentViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134762F9F0085004B375A /* WoundAssessmentViewController.swift */; };
+		248134792F9F00A5004B375A /* PostScanAssignmentViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134782F9F00A5004B375A /* PostScanAssignmentViewController.swift */; };
 		249019E32F98790D006CFC7B /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019E22F98790D006CFC7B /* FeatureFlags.swift */; };
 		249019E62F9879E9006CFC7B /* V5CaptureViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019E52F9879E9006CFC7B /* V5CaptureViewModel.swift */; };
 		249019E82F9879F7006CFC7B /* V5CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019E72F9879F7006CFC7B /* V5CaptureView.swift */; };
@@ -91,6 +94,9 @@
 		2481346C2F9DF149004B375A /* SettingsCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCoordinator.swift; sourceTree = "<group>"; };
 		2481346E2F9DF172004B375A /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
 		248134702F9DF172004B375A /* DashboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewController.swift; sourceTree = "<group>"; };
+		248134742F9F004B004B375A /* WoundAssessmentViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WoundAssessmentViewModel.swift; sourceTree = "<group>"; };
+		248134762F9F0085004B375A /* WoundAssessmentViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WoundAssessmentViewController.swift; sourceTree = "<group>"; };
+		248134782F9F00A5004B375A /* PostScanAssignmentViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostScanAssignmentViewController.swift; sourceTree = "<group>"; };
 		249019E22F98790D006CFC7B /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
 		249019E52F9879E9006CFC7B /* V5CaptureViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V5CaptureViewModel.swift; sourceTree = "<group>"; };
 		249019E72F9879F7006CFC7B /* V5CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V5CaptureView.swift; sourceTree = "<group>"; };
@@ -193,6 +199,23 @@
 				248134702F9DF172004B375A /* DashboardViewController.swift */,
 			);
 			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		248134722F9F0036004B375A /* WoundAssessment */ = {
+			isa = PBXGroup;
+			children = (
+				248134742F9F004B004B375A /* WoundAssessmentViewModel.swift */,
+				248134762F9F0085004B375A /* WoundAssessmentViewController.swift */,
+			);
+			path = WoundAssessment;
+			sourceTree = "<group>";
+		};
+		248134732F9F0037004B375A /* PostScanAssignment */ = {
+			isa = PBXGroup;
+			children = (
+				248134782F9F00A5004B375A /* PostScanAssignmentViewController.swift */,
+			);
+			path = PostScanAssignment;
 			sourceTree = "<group>";
 		};
 		249019E42F9879D4006CFC7B /* V5Capture */ = {
@@ -314,6 +337,8 @@
 				248134552F9DF083004B375A /* PatientDetail */,
 				248134562F9DF084004B375A /* PatientForm */,
 				248134572F9DF084004B375A /* Dashboard */,
+				248134722F9F0036004B375A /* WoundAssessment */,
+				248134732F9F0037004B375A /* PostScanAssignment */,
 			);
 			path = Scenes;
 			sourceTree = "<group>";
@@ -491,6 +516,7 @@
 				242974332F97106A001E05D8 /* ImageViewGeometry.swift in Sources */,
 				24901A122F9B2797006CFC7B /* SettingsViewController.swift in Sources */,
 				BBBB00000000000000000005 /* CaptureCoordinator.swift in Sources */,
+				248134772F9F0085004B375A /* WoundAssessmentViewController.swift in Sources */,
 				BBBB00000000000000000006 /* Coordinator.swift in Sources */,
 				BBBB00000000000000000007 /* ScanListCoordinator.swift in Sources */,
 				BBBB00000000000000000008 /* BoundaryDrawingViewController.swift in Sources */,
@@ -515,12 +541,14 @@
 				249019EC2F987A10006CFC7B /* DistanceRingView.swift in Sources */,
 				248134652F9DF103004B375A /* PatientDetailViewController.swift in Sources */,
 				249019EE2F987A11006CFC7B /* TrackingIndicatorView.swift in Sources */,
+				248134752F9F004B004B375A /* WoundAssessmentViewModel.swift in Sources */,
 				248134592F9DF097004B375A /* PatientCoordinator.swift in Sources */,
 				249019E82F9879F7006CFC7B /* V5CaptureView.swift in Sources */,
 				249019F62F987A22006CFC7B /* V5CaptureHostingController.swift in Sources */,
 				24901A0A2F99E7CB006CFC7B /* BrandedNavigationController.swift in Sources */,
 				24901A162F9DDFAE006CFC7B /* LocalClinicalStorage.swift in Sources */,
 				BBBB00000000000000000013 /* MeasurementResultViewModel.swift in Sources */,
+				248134792F9F00A5004B375A /* PostScanAssignmentViewController.swift in Sources */,
 				249019F92F987A42006CFC7B /* CaptureBundleEntity.swift in Sources */,
 				BBBB00000000000000000014 /* ScanDetailViewController.swift in Sources */,
 				BBBB00000000000000000015 /* ScanDetailViewModel.swift in Sources */,
@@ -549,7 +577,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = 829CPR87G4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
@@ -577,7 +605,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = 829CPR87G4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;

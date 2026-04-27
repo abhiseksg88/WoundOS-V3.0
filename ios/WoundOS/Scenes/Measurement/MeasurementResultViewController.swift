@@ -63,6 +63,20 @@ final class MeasurementResultViewController: UIViewController {
         return button
     }()
 
+    private lazy var assessmentButton: UIButton = {
+        var config = UIButton.Configuration.filled()
+        config.title = "Continue to Assessment"
+        config.image = UIImage(systemName: "doc.text.fill")
+        config.imagePadding = 8
+        config.cornerStyle = .large
+        config.baseBackgroundColor = WOColors.primaryGreen
+        config.baseForegroundColor = .white
+        let button = UIButton(configuration: config)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: #selector(assessmentTapped), for: .touchUpInside)
+        return button
+    }()
+
     // MARK: - Init
 
     init(viewModel: MeasurementResultViewModel) {
@@ -90,26 +104,59 @@ final class MeasurementResultViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .never
 
         view.addSubview(scrollView)
-        view.addSubview(saveButton)
         scrollView.addSubview(contentStack)
 
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: saveButton.topAnchor, constant: -WOSpacing.md),
+        if viewModel.showContinueToAssessment {
+            let buttonStack = UIStackView(arrangedSubviews: [assessmentButton, saveButton])
+            buttonStack.axis = .vertical
+            buttonStack.spacing = WOSpacing.sm
+            buttonStack.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview(buttonStack)
 
-            contentStack.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentStack.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentStack.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            contentStack.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+            var saveConfig = saveButton.configuration
+            saveConfig?.baseBackgroundColor = .secondarySystemFill
+            saveConfig?.baseForegroundColor = WOColors.secondaryText
+            saveButton.configuration = saveConfig
 
-            saveButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: WOSpacing.lg),
-            saveButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -WOSpacing.lg),
-            saveButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -WOSpacing.md),
-            saveButton.heightAnchor.constraint(equalToConstant: 50),
-        ])
+            NSLayoutConstraint.activate([
+                scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+                scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                scrollView.bottomAnchor.constraint(equalTo: buttonStack.topAnchor, constant: -WOSpacing.md),
+
+                contentStack.topAnchor.constraint(equalTo: scrollView.topAnchor),
+                contentStack.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+                contentStack.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+                contentStack.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+                contentStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+
+                buttonStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: WOSpacing.lg),
+                buttonStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -WOSpacing.lg),
+                buttonStack.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -WOSpacing.md),
+                assessmentButton.heightAnchor.constraint(equalToConstant: 50),
+                saveButton.heightAnchor.constraint(equalToConstant: 50),
+            ])
+        } else {
+            view.addSubview(saveButton)
+
+            NSLayoutConstraint.activate([
+                scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+                scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                scrollView.bottomAnchor.constraint(equalTo: saveButton.topAnchor, constant: -WOSpacing.md),
+
+                contentStack.topAnchor.constraint(equalTo: scrollView.topAnchor),
+                contentStack.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+                contentStack.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+                contentStack.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+                contentStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+
+                saveButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: WOSpacing.lg),
+                saveButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -WOSpacing.lg),
+                saveButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -WOSpacing.md),
+                saveButton.heightAnchor.constraint(equalToConstant: 50),
+            ])
+        }
     }
 
     // MARK: - Content
@@ -151,7 +198,21 @@ final class MeasurementResultViewController: UIViewController {
         let woundBadge = WOWoundBadge(label: "Wound W1")
         contentStack.addArrangedSubview(woundBadge)
 
-        // === Primary Measurements Card ===
+        // === Clinical Measurement (Manual) Section ===
+        if viewModel.showContinueToAssessment {
+            contentStack.addArrangedSubview(makeManualMeasurementSection())
+            contentStack.addArrangedSubview(makeSpacer(WOSpacing.sectionSpacing))
+        }
+
+        // === Auto-Measured Section Header ===
+        if viewModel.showContinueToAssessment {
+            let autoHeader = makeSubduedSectionHeader(
+                title: "Auto-Measured (Research)",
+                subtitle: "Collected for accuracy validation \u{2014} not for clinical use"
+            )
+            contentStack.addArrangedSubview(autoHeader)
+        }
+
         let measurementCard = WOCardView()
         measurementCard.translatesAutoresizingMaskIntoConstraints = false
 
@@ -296,6 +357,165 @@ final class MeasurementResultViewController: UIViewController {
         return container
     }
 
+    // MARK: - Manual Measurement Section
+
+    private func makeManualMeasurementSection() -> UIView {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        let headerLabel = UILabel()
+        headerLabel.text = "Clinical Measurement"
+        headerLabel.font = WOFonts.title3
+        headerLabel.textColor = WOColors.primaryText
+        headerLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "Recorded by nurse with traditional measurement tools"
+        subtitleLabel.font = WOFonts.footnote
+        subtitleLabel.textColor = WOColors.secondaryText
+        subtitleLabel.numberOfLines = 0
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let card = WOCardView()
+        card.translatesAutoresizingMaskIntoConstraints = false
+
+        let fieldStack = UIStackView()
+        fieldStack.axis = .vertical
+        fieldStack.spacing = WOSpacing.sm
+        fieldStack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(fieldStack)
+
+        NSLayoutConstraint.activate([
+            fieldStack.topAnchor.constraint(equalTo: card.topAnchor, constant: WOSpacing.cardPaddingV),
+            fieldStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: WOSpacing.cardPaddingH),
+            fieldStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -WOSpacing.cardPaddingH),
+            fieldStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -WOSpacing.cardPaddingV),
+        ])
+
+        let lengthField = makeManualField(label: "Length (cm)", keyPath: \.manualLengthCm)
+        let widthField = makeManualField(label: "Width (cm)", keyPath: \.manualWidthCm)
+        let depthField = makeManualField(label: "Depth (cm)", keyPath: \.manualDepthCm)
+
+        fieldStack.addArrangedSubview(lengthField)
+        fieldStack.addArrangedSubview(widthField)
+        fieldStack.addArrangedSubview(depthField)
+        fieldStack.addArrangedSubview(makeMethodPicker())
+
+        container.addSubview(headerLabel)
+        container.addSubview(subtitleLabel)
+        container.addSubview(card)
+
+        NSLayoutConstraint.activate([
+            headerLabel.topAnchor.constraint(equalTo: container.topAnchor),
+            headerLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: WOSpacing.lg),
+            headerLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -WOSpacing.lg),
+
+            subtitleLabel.topAnchor.constraint(equalTo: headerLabel.bottomAnchor, constant: 4),
+            subtitleLabel.leadingAnchor.constraint(equalTo: headerLabel.leadingAnchor),
+            subtitleLabel.trailingAnchor.constraint(equalTo: headerLabel.trailingAnchor),
+
+            card.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: WOSpacing.md),
+            card.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: WOSpacing.lg),
+            card.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -WOSpacing.lg),
+            card.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
+        return container
+    }
+
+    private func makeManualField(label: String, keyPath: ReferenceWritableKeyPath<MeasurementResultViewModel, String>) -> UIView {
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.spacing = WOSpacing.md
+        row.alignment = .center
+
+        let lbl = UILabel()
+        lbl.text = label
+        lbl.font = WOFonts.body
+        lbl.textColor = WOColors.primaryText
+        lbl.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+
+        let field = UITextField()
+        field.font = WOFonts.measurementValue
+        field.textColor = WOColors.primaryGreen
+        field.textAlignment = .right
+        field.keyboardType = .decimalPad
+        field.placeholder = "0.0"
+        field.borderStyle = .roundedRect
+        field.backgroundColor = WOColors.screenBackground
+        field.text = viewModel[keyPath: keyPath]
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.widthAnchor.constraint(equalToConstant: 100).isActive = true
+
+        field.addAction(UIAction { [weak self] action in
+            guard let self, let tf = action.sender as? UITextField else { return }
+            self.viewModel[keyPath: keyPath] = tf.text ?? ""
+        }, for: .editingChanged)
+
+        row.addArrangedSubview(lbl)
+        row.addArrangedSubview(field)
+        return row
+    }
+
+    private func makeMethodPicker() -> UIView {
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.spacing = WOSpacing.md
+        row.alignment = .center
+
+        let lbl = UILabel()
+        lbl.text = "Method"
+        lbl.font = WOFonts.body
+        lbl.textColor = WOColors.primaryText
+        lbl.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+
+        let items = MeasurementResultViewModel.ManualMethod.allCases.map(\.rawValue)
+        let seg = UISegmentedControl(items: items)
+        seg.selectedSegmentIndex = 0
+        seg.addAction(UIAction { [weak self] action in
+            guard let sc = action.sender as? UISegmentedControl else { return }
+            self?.viewModel.manualMethod = MeasurementResultViewModel.ManualMethod.allCases[sc.selectedSegmentIndex]
+        }, for: .valueChanged)
+
+        row.addArrangedSubview(lbl)
+        row.addArrangedSubview(seg)
+        return row
+    }
+
+    private func makeSubduedSectionHeader(title: String, subtitle: String) -> UIView {
+        let container = UIView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = WOFonts.subheadline
+        titleLabel.textColor = WOColors.tertiaryText
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = subtitle
+        subtitleLabel.font = WOFonts.caption1
+        subtitleLabel.textColor = WOColors.tertiaryText
+        subtitleLabel.numberOfLines = 0
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(titleLabel)
+        container.addSubview(subtitleLabel)
+
+        NSLayoutConstraint.activate([
+            titleLabel.topAnchor.constraint(equalTo: container.topAnchor),
+            titleLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: WOSpacing.lg),
+            titleLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -WOSpacing.lg),
+
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
+            subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+            subtitleLabel.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -WOSpacing.sm),
+        ])
+
+        return container
+    }
+
     /// Project the actual rotating-calipers length endpoints (3D world space)
     /// back to normalized 2D image coordinates for the overlay.
     private func makeLengthEndpoints() -> (CGPoint, CGPoint)? {
@@ -366,5 +586,9 @@ final class MeasurementResultViewController: UIViewController {
 
     @objc private func saveTapped() {
         viewModel.saveAndUpload()
+    }
+
+    @objc private func assessmentTapped() {
+        viewModel.onContinueToAssessment?()
     }
 }

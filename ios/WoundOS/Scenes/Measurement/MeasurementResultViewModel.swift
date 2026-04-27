@@ -15,9 +15,25 @@ final class MeasurementResultViewModel: ObservableObject {
     @Published var isUploading = false
     @Published var saveError: String?
 
+    // MARK: - Manual Clinical Measurements
+
+    @Published var manualLengthCm: String = ""
+    @Published var manualWidthCm: String = ""
+    @Published var manualDepthCm: String = ""
+    @Published var manualMethod: ManualMethod = .ruler
+
+    enum ManualMethod: String, CaseIterable {
+        case ruler = "Ruler"
+        case tracing = "Tracing"
+        case digital = "Digital"
+    }
+
     // MARK: - Navigation
 
     var onSaveComplete: (() -> Void)?
+    var onContinueToAssessment: (() -> Void)?
+
+    let showContinueToAssessment: Bool
 
     // MARK: - Dependencies
 
@@ -104,10 +120,16 @@ final class MeasurementResultViewModel: ObservableObject {
 
     // MARK: - Init
 
-    init(scan: WoundScan, storage: StorageProviderProtocol, uploadManager: UploadManager) {
+    init(
+        scan: WoundScan,
+        storage: StorageProviderProtocol,
+        uploadManager: UploadManager,
+        showContinueToAssessment: Bool = false
+    ) {
         self.scan = scan
         self.storage = storage
         self.uploadManager = uploadManager
+        self.showContinueToAssessment = showContinueToAssessment
     }
 
     // MARK: - Save & Upload

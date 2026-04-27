@@ -11,6 +11,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
     public let notes: String
     public let segmentation: SegmentationPayload
     public let measurements: MeasurementsPayload
+    public let manualMeasurements: ManualMeasurementsPayload?
     public let lidarMetadata: LiDARMetadataPayload
     public let artifacts: ArtifactsPayload
 
@@ -22,6 +23,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
         case notes
         case segmentation
         case measurements
+        case manualMeasurements = "manual_measurements"
         case lidarMetadata = "lidar_metadata"
         case artifacts
     }
@@ -34,6 +36,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
         notes: String,
         segmentation: SegmentationPayload,
         measurements: MeasurementsPayload,
+        manualMeasurements: ManualMeasurementsPayload? = nil,
         lidarMetadata: LiDARMetadataPayload,
         artifacts: ArtifactsPayload
     ) {
@@ -44,6 +47,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
         self.notes = String(notes.prefix(2000))
         self.segmentation = segmentation
         self.measurements = measurements
+        self.manualMeasurements = manualMeasurements
         self.lidarMetadata = lidarMetadata
         self.artifacts = artifacts
     }
@@ -207,6 +211,29 @@ public struct MeasurementsPayload: Codable, Sendable {
         if let v = areaCm2 { try container.encode(v, forKey: .areaCm2) } else { try container.encodeNil(forKey: .areaCm2) }
         if let v = perimeterCm { try container.encode(v, forKey: .perimeterCm) } else { try container.encodeNil(forKey: .perimeterCm) }
         if let v = depthCm { try container.encode(v, forKey: .depthCm) } else { try container.encodeNil(forKey: .depthCm) }
+    }
+}
+
+// MARK: - Manual Measurements
+
+public struct ManualMeasurementsPayload: Codable, Sendable {
+    public let lengthCm: Double?
+    public let widthCm: Double?
+    public let depthCm: Double?
+    public let method: String
+
+    enum CodingKeys: String, CodingKey {
+        case lengthCm = "length_cm"
+        case widthCm = "width_cm"
+        case depthCm = "depth_cm"
+        case method
+    }
+
+    public init(lengthCm: Double?, widthCm: Double?, depthCm: Double?, method: String) {
+        self.lengthCm = lengthCm
+        self.widthCm = widthCm
+        self.depthCm = depthCm
+        self.method = method
     }
 }
 

@@ -10,6 +10,7 @@ final class PatientListViewModel: ObservableObject {
 
     @Published var activePatients: [Patient] = []
     @Published var inactivePatients: [Patient] = []
+    @Published var woundCounts: [UUID: Int] = [:]
     @Published var isLoading = false
     @Published var error: String?
     @Published var searchText: String = ""
@@ -44,6 +45,15 @@ final class PatientListViewModel: ObservableObject {
                 }
                 activePatients = patients.filter { $0.isActive }
                 inactivePatients = patients.filter { !$0.isActive }
+
+                var counts: [UUID: Int] = [:]
+                for patient in patients {
+                    let wounds = (try? await storage.fetchWounds(patientId: patient.id)) ?? []
+                    let activeWounds = wounds.filter { !$0.isHealed }
+                    counts[patient.id] = activeWounds.count
+                }
+                woundCounts = counts
+
                 isLoading = false
             } catch {
                 self.error = error.localizedDescription

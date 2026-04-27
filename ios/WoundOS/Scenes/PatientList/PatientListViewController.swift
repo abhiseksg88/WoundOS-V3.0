@@ -229,7 +229,8 @@ extension PatientListViewController: UITableViewDataSource {
             patient = viewModel.inactivePatients[indexPath.row]
         }
 
-        cell.configure(with: patient)
+        let woundCount = viewModel.woundCounts[patient.id] ?? 0
+        cell.configure(with: patient, woundCount: woundCount)
         return cell
     }
 

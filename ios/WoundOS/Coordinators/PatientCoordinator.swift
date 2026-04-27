@@ -78,6 +78,66 @@ final class PatientCoordinator: Coordinator {
     }
 
     private func startCaptureFlow(patient: Patient) {
-        // Phase 5D — will transition to enhanced capture coordinator
+        Task { @MainActor in
+            let wounds = (try? await dependencies.clinicalStorage.fetchWounds(patientId: patient.id)) ?? []
+
+            if wounds.isEmpty {
+                showWoundCreationThenCapture(patient: patient)
+            } else if wounds.count == 1 {
+                launchCapture(patient: patient, wound: wounds[0])
+            } else {
+                showWoundPicker(patient: patient, wounds: wounds)
+            }
+        }
+    }
+
+    private func showWoundPicker(patient: Patient, wounds: [Wound]) {
+        let alert = UIAlertController(title: "Select Wound", message: "Which wound are you assessing?", preferredStyle: .actionSheet)
+        for wound in wounds {
+            alert.addAction(UIAlertAction(title: "\(wound.label) — \(wound.woundType.displayName)", style: .default) { [weak self] _ in
+                self?.launchCapture(patient: patient, wound: wound)
+            })
+        }
+        alert.addAction(UIAlertAction(title: "New Wound", style: .default) { [weak self] _ in
+            self?.showWoundCreationThenCapture(patient: patient)
+        })
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        navigationController.present(alert, animated: true)
+    }
+
+    private func showWoundCreationThenCapture(patient: Patient) {
+        let newWound = Wound(
+            patientId: patient.id,
+            label: "W1",
+            woundType: .other,
+            anatomicalLocation: AnatomicalLocation(region: .other, laterality: .notApplicable)
+        )
+        Task { @MainActor in
+            try? await dependencies.clinicalStorage.saveWound(newWound)
+            launchCapture(patient: patient, wound: newWound)
+        }
+    }
+
+    private func launchCapture(patient: Patient, wound: Wound) {
+        let captureNav = BrandedNavigationController()
+        let captureCoordinator = CaptureCoordinator(
+            navigationController: captureNav,
+            dependencies: dependencies
+        )
+        captureCoordinator.clinicalContext = ClinicalCaptureContext(patient: patient, wound: wound)
+        captureCoordinator.onFlowComplete = { [weak self, weak captureNav] in
+            captureNav?.dismiss(animated: true)
+            if let childIdx = self?.childCoordinators.firstIndex(where: { $0 === captureCoordinator }) {
+                self?.childCoordinators.remove(at: childIdx)
+            }
+            if let detailVC = self?.navigationController.topViewController as? PatientDetailViewController {
+                detailVC.refreshData()
+            }
+        }
+
+        childCoordinators.append(captureCoordinator)
+        captureCoordinator.start()
+        captureNav.modalPresentationStyle = .fullScreen
+        navigationController.present(captureNav, animated: true)
     }
 }

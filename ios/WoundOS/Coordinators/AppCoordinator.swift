@@ -98,10 +98,10 @@ final class AppCoordinator: Coordinator {
         addChild(patientCoordinator)
         patientCoordinator.start()
 
-        // Tab 3: Capture
+        // Tab 3: Quick Scan
         let captureNav = BrandedNavigationController()
         captureNav.tabBarItem = UITabBarItem(
-            title: "Capture",
+            title: "Quick Scan",
             image: UIImage(systemName: "camera.viewfinder"),
             tag: 2
         )

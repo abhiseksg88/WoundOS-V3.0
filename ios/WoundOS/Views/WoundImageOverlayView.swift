@@ -42,7 +42,7 @@ final class WoundImageOverlayView: UIView {
 
     private let imageView: UIImageView = {
         let iv = UIImageView()
-        iv.contentMode = .scaleAspectFill
+        iv.contentMode = .scaleAspectFit
         iv.clipsToBounds = true
         iv.translatesAutoresizingMaskIntoConstraints = false
         return iv
@@ -198,7 +198,27 @@ final class WoundImageOverlayView: UIView {
     // MARK: - Helpers
 
     private func denormalize(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        CGPoint(x: point.x * size.width, y: point.y * size.height)
+        let fitted = imageFittedRect(in: size)
+        return CGPoint(
+            x: fitted.origin.x + point.x * fitted.width,
+            y: fitted.origin.y + point.y * fitted.height
+        )
+    }
+
+    private func imageFittedRect(in viewSize: CGSize) -> CGRect {
+        guard let image = config?.image else {
+            return CGRect(origin: .zero, size: viewSize)
+        }
+        let imageSize = image.size
+        guard imageSize.width > 0, imageSize.height > 0 else {
+            return CGRect(origin: .zero, size: viewSize)
+        }
+        let scale = min(viewSize.width / imageSize.width, viewSize.height / imageSize.height)
+        let scaledW = imageSize.width * scale
+        let scaledH = imageSize.height * scale
+        let x = (viewSize.width - scaledW) / 2
+        let y = (viewSize.height - scaledH) / 2
+        return CGRect(x: x, y: y, width: scaledW, height: scaledH)
     }
 
     private func positionLabel(_ label: WOMeasurementLabel, at point: CGPoint, in viewSize: CGSize) {

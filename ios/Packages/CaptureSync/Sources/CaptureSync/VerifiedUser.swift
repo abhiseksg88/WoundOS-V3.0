@@ -28,6 +28,13 @@ public struct VerifiedUser: Codable, Sendable, Equatable {
 struct AuthVerifyResponse: Decodable {
     let valid: Bool
     let user: AuthVerifyUser
+    let tokenLabel: String?
+
+    enum CodingKeys: String, CodingKey {
+        case valid
+        case user
+        case tokenLabel = "token_label"
+    }
 
     struct AuthVerifyUser: Decodable {
         let id: String
@@ -35,13 +42,6 @@ struct AuthVerifyResponse: Decodable {
         let email: String
         let role: String
         let facilityId: String
-        let tokenLabel: String?
-
-        enum CodingKeys: String, CodingKey {
-            case id, name, email, role
-            case facilityId = "facility_id"
-            case tokenLabel = "token_label"
-        }
     }
 }
 

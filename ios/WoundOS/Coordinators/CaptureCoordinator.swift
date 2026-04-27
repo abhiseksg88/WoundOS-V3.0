@@ -2,6 +2,14 @@ import UIKit
 import SwiftUI
 import WoundCore
 import WoundCapture
+import WoundClinical
+
+// MARK: - Clinical Context
+
+struct ClinicalCaptureContext {
+    let patient: Patient
+    let wound: Wound
+}
 
 // MARK: - Capture Coordinator
 
@@ -12,6 +20,15 @@ final class CaptureCoordinator: Coordinator {
     let navigationController: UINavigationController
     var childCoordinators: [Coordinator] = []
     let dependencies: DependencyContainer
+
+    /// When set, the capture was initiated from Patient Detail ("Start Assessment")
+    /// and the post-measurement flow skips patient assignment.
+    var clinicalContext: ClinicalCaptureContext?
+
+    /// Called when the entire capture + assessment flow completes.
+    var onFlowComplete: (() -> Void)?
+
+    private var pendingManualMeasurements: ManualMeasurements?
 
     init(navigationController: UINavigationController, dependencies: DependencyContainer) {
         self.navigationController = navigationController
@@ -141,18 +158,123 @@ final class CaptureCoordinator: Coordinator {
             "processingTimeMs": scan.primaryMeasurement.processingTimeMs,
             "pushScore": scan.pushScore.totalScore,
         ])
+
+        let useClinicalFlow = FeatureFlags.isEnabled(.clinicalAssessment)
+
         let viewModel = MeasurementResultViewModel(
             scan: scan,
             storage: dependencies.localStorage,
-            uploadManager: dependencies.uploadManager
+            uploadManager: dependencies.uploadManager,
+            showContinueToAssessment: useClinicalFlow
         )
+
         viewModel.onSaveComplete = { [weak self] in
             CrashLogger.shared.log("Save complete — returning to Capture", category: .coordinator)
-            self?.showCapture() // Return to capture for next wound
+            self?.showCapture()
+        }
+
+        viewModel.onContinueToAssessment = { [weak self, weak viewModel] in
+            guard let self else { return }
+            CrashLogger.shared.log("Continue to assessment — clinical flow", category: .coordinator)
+
+            var manualMeasurements: ManualMeasurements?
+            if let vm = viewModel {
+                let length = Double(vm.manualLengthCm)
+                let width = Double(vm.manualWidthCm)
+                let depth = Double(vm.manualDepthCm)
+                if length != nil || width != nil || depth != nil {
+                    let source: ManualMeasurementSource
+                    switch vm.manualMethod {
+                    case .ruler: source = .nurseEntered
+                    case .tracing: source = .nurseEntered
+                    case .digital: source = .nurseEntered
+                    }
+                    manualMeasurements = ManualMeasurements(
+                        lengthCm: length,
+                        widthCm: width,
+                        depthCm: depth,
+                        source: source
+                    )
+                }
+            }
+
+            if let context = self.clinicalContext {
+                self.showWoundAssessment(scan: scan, patient: context.patient, wound: context.wound, manualMeasurements: manualMeasurements)
+            } else {
+                self.pendingManualMeasurements = manualMeasurements
+                self.showPostScanAssignment(scan: scan)
+            }
         }
 
         let viewController = MeasurementResultViewController(viewModel: viewModel)
         viewController.title = "Measurement Results"
         navigationController.pushViewController(viewController, animated: true)
+    }
+
+    // MARK: - Step 4a: Post-Scan Patient Assignment (Quick Scan path)
+
+    private func showPostScanAssignment(scan: WoundScan) {
+        CrashLogger.shared.log("Navigating to Post-Scan Assignment", category: .coordinator)
+        let assignmentVC = PostScanAssignmentViewController(storage: dependencies.clinicalStorage)
+
+        assignmentVC.onAssigned = { [weak self] patient, wound in
+            let manual = self?.pendingManualMeasurements
+            self?.pendingManualMeasurements = nil
+            self?.showWoundAssessment(scan: scan, patient: patient, wound: wound, manualMeasurements: manual)
+        }
+
+        assignmentVC.onSkip = { [weak self] in
+            CrashLogger.shared.log("Skipped patient assignment — saving unassigned", category: .coordinator)
+            self?.saveAndFinish(scan: scan)
+        }
+
+        navigationController.pushViewController(assignmentVC, animated: true)
+    }
+
+    // MARK: - Step 4b: Wound Assessment Form
+
+    private func showWoundAssessment(scan: WoundScan, patient: Patient, wound: Wound, manualMeasurements: ManualMeasurements? = nil) {
+        CrashLogger.shared.log("Navigating to Wound Assessment for \(patient.fullName) — \(wound.label)", category: .coordinator)
+        let viewModel = WoundAssessmentViewModel(
+            scan: scan,
+            patient: patient,
+            wound: wound,
+            clinicalStorage: dependencies.clinicalStorage,
+            scanStorage: dependencies.localStorage,
+            uploadManager: dependencies.uploadManager,
+            tokenStore: dependencies.clinicalPlatformKeychain,
+            clinicalPlatformClient: dependencies.clinicalPlatformClient,
+            manualMeasurementsFromResult: manualMeasurements
+        )
+
+        viewModel.onAssessmentComplete = { [weak self] _ in
+            CrashLogger.shared.log("Assessment complete — flow finished", category: .coordinator)
+            self?.finishFlow()
+        }
+
+        viewModel.onCancel = { [weak self] in
+            self?.navigationController.popViewController(animated: true)
+        }
+
+        let viewController = WoundAssessmentViewController(viewModel: viewModel)
+        navigationController.pushViewController(viewController, animated: true)
+    }
+
+    // MARK: - Flow Completion
+
+    private func saveAndFinish(scan: WoundScan) {
+        Task { @MainActor in
+            try? await dependencies.localStorage.saveScan(scan)
+            await dependencies.uploadManager.enqueueUpload(scan: scan)
+            finishFlow()
+        }
+    }
+
+    private func finishFlow() {
+        if let onFlowComplete {
+            onFlowComplete()
+        } else {
+            showCapture()
+        }
     }
 }
