@@ -1,6 +1,5 @@
 import UIKit
 import Combine
-import simd
 import WoundCore
 
 // MARK: - Measurement Result View Controller
@@ -516,48 +515,72 @@ final class MeasurementResultViewController: UIViewController {
         return container
     }
 
-    /// Project the actual rotating-calipers length endpoints (3D world space)
-    /// back to normalized 2D image coordinates for the overlay.
+    /// Compute L/W endpoints directly from the 2D boundary polygon.
+    /// This avoids fragile 3D→2D reprojection through camera intrinsics.
     private func makeLengthEndpoints() -> (CGPoint, CGPoint)? {
-        guard let endpoints3D = viewModel.scan.primaryMeasurement.lengthEndpoints3D,
-              endpoints3D.count == 2 else {
-            return nil
-        }
-        return projectEndpoints(endpoints3D[0], endpoints3D[1])
+        let dims = compute2DDimensions()
+        return dims?.lengthEndpoints
     }
 
-    /// Project the actual rotating-calipers width endpoints to 2D.
     private func makeWidthEndpoints() -> (CGPoint, CGPoint)? {
-        guard let endpoints3D = viewModel.scan.primaryMeasurement.widthEndpoints3D,
-              endpoints3D.count == 2 else {
-            return nil
-        }
-        return projectEndpoints(endpoints3D[0], endpoints3D[1])
+        let dims = compute2DDimensions()
+        return dims?.widthEndpoints
     }
 
-    /// Project two 3D world-space points to normalized 2D image coordinates
-    /// using the frozen camera parameters from the capture data.
-    private func projectEndpoints(
-        _ a3d: SIMD3<Float>,
-        _ b3d: SIMD3<Float>
-    ) -> (CGPoint, CGPoint)? {
-        let captureData = viewModel.scan.captureData
-        let intrinsics = captureData.intrinsicsMatrix
-        let transform = captureData.transformMatrix
-        let viewMatrix = transform.inverse
+    private var cached2DDimensions: (lengthEndpoints: (CGPoint, CGPoint), widthEndpoints: (CGPoint, CGPoint))?
+    private var dimensionsComputed = false
 
-        func projectPoint(_ world: SIMD3<Float>) -> CGPoint? {
-            let camHomog = viewMatrix * SIMD4<Float>(world.x, world.y, world.z, 1.0)
-            let camPoint = SIMD3<Float>(camHomog.x, camHomog.y, camHomog.z)
-            guard camPoint.z > 0 else { return nil }
-            let projected = intrinsics * camPoint
-            let nx = projected.x / (projected.z * Float(captureData.imageWidth))
-            let ny = projected.y / (projected.z * Float(captureData.imageHeight))
-            return CGPoint(x: CGFloat(nx), y: CGFloat(ny))
+    private func compute2DDimensions() -> (lengthEndpoints: (CGPoint, CGPoint), widthEndpoints: (CGPoint, CGPoint))? {
+        if dimensionsComputed { return cached2DDimensions }
+        dimensionsComputed = true
+
+        let pts = viewModel.boundaryPointsCG
+        guard pts.count >= 3 else { return nil }
+
+        // Find length: max distance pair in 2D boundary
+        var maxDist: CGFloat = 0
+        var p1 = pts[0], p2 = pts[0]
+        for i in 0..<pts.count {
+            for j in (i + 1)..<pts.count {
+                let dx = pts[i].x - pts[j].x
+                let dy = pts[i].y - pts[j].y
+                let d = dx * dx + dy * dy
+                if d > maxDist {
+                    maxDist = d
+                    p1 = pts[i]
+                    p2 = pts[j]
+                }
+            }
         }
 
-        guard let a = projectPoint(a3d), let b = projectPoint(b3d) else { return nil }
-        return (a, b)
+        guard maxDist > 0 else { return nil }
+
+        // Length direction
+        let lenDx = p2.x - p1.x
+        let lenDy = p2.y - p1.y
+        let lenMag = sqrt(lenDx * lenDx + lenDy * lenDy)
+        guard lenMag > 1e-6 else { return nil }
+        let dirX = lenDx / lenMag
+        let dirY = lenDy / lenMag
+
+        // Width: max perpendicular extent
+        var maxPerp: CGFloat = 0
+        var w1 = pts[0], w2 = pts[0]
+        for pt in pts {
+            let dx = pt.x - p1.x
+            let dy = pt.y - p1.y
+            let perpDist = abs(-dirY * dx + dirX * dy)
+            if perpDist > maxPerp {
+                maxPerp = perpDist
+                let proj = dirX * dx + dirY * dy
+                let projPt = CGPoint(x: p1.x + proj * dirX, y: p1.y + proj * dirY)
+                w1 = projPt
+                w2 = pt
+            }
+        }
+
+        cached2DDimensions = (lengthEndpoints: (p1, p2), widthEndpoints: (w1, w2))
+        return cached2DDimensions
     }
 
     // MARK: - Bindings
