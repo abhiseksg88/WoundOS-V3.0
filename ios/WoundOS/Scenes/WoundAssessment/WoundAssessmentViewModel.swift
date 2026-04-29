@@ -259,11 +259,28 @@ final class WoundAssessmentViewModel: ObservableObject {
 
         let rgbBase64 = scan.captureData.rgbImageData.base64EncodedString()
 
+        let patientPayload: PatientContextPayload? = patient.map { p in
+            let dobFormatter = ISO8601DateFormatter()
+            dobFormatter.formatOptions = [.withFullDate]
+            return PatientContextPayload(
+                patientId: p.id.uuidString.lowercased(),
+                firstName: p.firstName,
+                lastName: p.lastName,
+                medicalRecordNumber: p.medicalRecordNumber,
+                dateOfBirth: dobFormatter.string(from: p.dateOfBirth),
+                woundId: wound?.id.uuidString.lowercased(),
+                woundLabel: wound?.label,
+                woundType: wound?.woundType.displayName,
+                anatomicalLocation: wound?.anatomicalLocation.displayName
+            )
+        }
+
         let payload = CaptureUploadPayload(
             captureId: scan.id,
             capturedAt: scan.capturedAt,
             device: DevicePayload.current(),
             capturedBy: CapturedByPayload(from: user),
+            patient: patientPayload,
             pushScore: Double(scan.pushScore.totalScore),
             notes: "",
             segmentation: SegmentationPayload(

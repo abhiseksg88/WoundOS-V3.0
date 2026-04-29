@@ -8,6 +8,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
     public let capturedAt: String
     public let device: DevicePayload
     public let capturedBy: CapturedByPayload
+    public let patient: PatientContextPayload?
     public let pushScore: Double?
     public let notes: String
     public let segmentation: SegmentationPayload
@@ -21,6 +22,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
         case capturedAt = "captured_at"
         case device
         case capturedBy = "captured_by"
+        case patient
         case pushScore = "push_score"
         case notes
         case segmentation
@@ -35,6 +37,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
         capturedAt: Date,
         device: DevicePayload,
         capturedBy: CapturedByPayload,
+        patient: PatientContextPayload? = nil,
         pushScore: Double? = nil,
         notes: String,
         segmentation: SegmentationPayload,
@@ -47,6 +50,7 @@ public struct CaptureUploadPayload: Codable, Sendable {
         self.capturedAt = Self.formatDate(capturedAt)
         self.device = device
         self.capturedBy = capturedBy
+        self.patient = patient
         self.pushScore = pushScore
         self.notes = String(notes.prefix(2000))
         self.segmentation = segmentation
@@ -242,6 +246,54 @@ public struct ManualMeasurementsPayload: Codable, Sendable {
         self.widthCm = widthCm
         self.depthCm = depthCm
         self.method = method
+    }
+}
+
+// MARK: - Patient Context
+
+public struct PatientContextPayload: Codable, Sendable {
+    public let patientId: String
+    public let firstName: String
+    public let lastName: String
+    public let medicalRecordNumber: String
+    public let dateOfBirth: String?
+    public let woundId: String?
+    public let woundLabel: String?
+    public let woundType: String?
+    public let anatomicalLocation: String?
+
+    enum CodingKeys: String, CodingKey {
+        case patientId = "patient_id"
+        case firstName = "first_name"
+        case lastName = "last_name"
+        case medicalRecordNumber = "medical_record_number"
+        case dateOfBirth = "date_of_birth"
+        case woundId = "wound_id"
+        case woundLabel = "wound_label"
+        case woundType = "wound_type"
+        case anatomicalLocation = "anatomical_location"
+    }
+
+    public init(
+        patientId: String,
+        firstName: String,
+        lastName: String,
+        medicalRecordNumber: String,
+        dateOfBirth: String? = nil,
+        woundId: String? = nil,
+        woundLabel: String? = nil,
+        woundType: String? = nil,
+        anatomicalLocation: String? = nil
+    ) {
+        self.patientId = patientId
+        self.firstName = firstName
+        self.lastName = lastName
+        self.medicalRecordNumber = medicalRecordNumber
+        self.dateOfBirth = dateOfBirth
+        self.woundId = woundId
+        self.woundLabel = woundLabel
+        self.woundType = woundType
+        self.anatomicalLocation = anatomicalLocation
     }
 }
 
