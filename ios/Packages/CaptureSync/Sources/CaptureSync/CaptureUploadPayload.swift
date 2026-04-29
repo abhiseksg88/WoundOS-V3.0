@@ -9,7 +9,10 @@ public struct CaptureUploadPayload: Codable, Sendable {
     public let device: DevicePayload
     public let capturedBy: CapturedByPayload
     public let patient: PatientContextPayload?
+    public let encounter: EncounterContextPayload?
     public let pushScore: Double?
+    public let pushScoreDetail: PUSHScoreDetailPayload?
+    public let clinicalAssessment: ClinicalAssessmentPayload?
     public let notes: String
     public let segmentation: SegmentationPayload
     public let measurements: MeasurementsPayload
@@ -23,7 +26,10 @@ public struct CaptureUploadPayload: Codable, Sendable {
         case device
         case capturedBy = "captured_by"
         case patient
+        case encounter
         case pushScore = "push_score"
+        case pushScoreDetail = "push_score_detail"
+        case clinicalAssessment = "clinical_assessment"
         case notes
         case segmentation
         case measurements
@@ -38,7 +44,10 @@ public struct CaptureUploadPayload: Codable, Sendable {
         device: DevicePayload,
         capturedBy: CapturedByPayload,
         patient: PatientContextPayload? = nil,
+        encounter: EncounterContextPayload? = nil,
         pushScore: Double? = nil,
+        pushScoreDetail: PUSHScoreDetailPayload? = nil,
+        clinicalAssessment: ClinicalAssessmentPayload? = nil,
         notes: String,
         segmentation: SegmentationPayload,
         measurements: MeasurementsPayload,
@@ -51,7 +60,10 @@ public struct CaptureUploadPayload: Codable, Sendable {
         self.device = device
         self.capturedBy = capturedBy
         self.patient = patient
+        self.encounter = encounter
         self.pushScore = pushScore
+        self.pushScoreDetail = pushScoreDetail
+        self.clinicalAssessment = clinicalAssessment
         self.notes = String(notes.prefix(2000))
         self.segmentation = segmentation
         self.measurements = measurements
@@ -193,6 +205,8 @@ public struct MeasurementsPayload: Codable, Sendable {
     public let areaCm2: Double?
     public let perimeterCm: Double?
     public let depthCm: Double?
+    public let meanDepthCm: Double?
+    public let volumeMl: Double?
 
     enum CodingKeys: String, CodingKey {
         case lengthCm = "length_cm"
@@ -200,6 +214,8 @@ public struct MeasurementsPayload: Codable, Sendable {
         case areaCm2 = "area_cm2"
         case perimeterCm = "perimeter_cm"
         case depthCm = "depth_cm"
+        case meanDepthCm = "mean_depth_cm"
+        case volumeMl = "volume_ml"
     }
 
     public init(
@@ -207,13 +223,17 @@ public struct MeasurementsPayload: Codable, Sendable {
         widthCm: Double?,
         areaCm2: Double?,
         perimeterCm: Double?,
-        depthCm: Double?
+        depthCm: Double?,
+        meanDepthCm: Double? = nil,
+        volumeMl: Double? = nil
     ) {
         self.lengthCm = lengthCm
         self.widthCm = widthCm
         self.areaCm2 = areaCm2
         self.perimeterCm = perimeterCm
         self.depthCm = depthCm
+        self.meanDepthCm = meanDepthCm
+        self.volumeMl = volumeMl
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -223,6 +243,8 @@ public struct MeasurementsPayload: Codable, Sendable {
         if let v = areaCm2 { try container.encode(v, forKey: .areaCm2) } else { try container.encodeNil(forKey: .areaCm2) }
         if let v = perimeterCm { try container.encode(v, forKey: .perimeterCm) } else { try container.encodeNil(forKey: .perimeterCm) }
         if let v = depthCm { try container.encode(v, forKey: .depthCm) } else { try container.encodeNil(forKey: .depthCm) }
+        if let v = meanDepthCm { try container.encode(v, forKey: .meanDepthCm) } else { try container.encodeNil(forKey: .meanDepthCm) }
+        if let v = volumeMl { try container.encode(v, forKey: .volumeMl) } else { try container.encodeNil(forKey: .volumeMl) }
     }
 }
 
@@ -294,6 +316,164 @@ public struct PatientContextPayload: Codable, Sendable {
         self.woundLabel = woundLabel
         self.woundType = woundType
         self.anatomicalLocation = anatomicalLocation
+    }
+}
+
+// MARK: - Encounter Context
+
+public struct EncounterContextPayload: Codable, Sendable {
+    public let encounterId: String
+    public let assessmentId: String
+    public let nurseId: String
+    public let facilityId: String
+    public let visitDate: String
+    public let assessedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case encounterId = "encounter_id"
+        case assessmentId = "assessment_id"
+        case nurseId = "nurse_id"
+        case facilityId = "facility_id"
+        case visitDate = "visit_date"
+        case assessedAt = "assessed_at"
+    }
+
+    public init(
+        encounterId: String,
+        assessmentId: String,
+        nurseId: String,
+        facilityId: String,
+        visitDate: String,
+        assessedAt: String
+    ) {
+        self.encounterId = encounterId
+        self.assessmentId = assessmentId
+        self.nurseId = nurseId
+        self.facilityId = facilityId
+        self.visitDate = visitDate
+        self.assessedAt = assessedAt
+    }
+}
+
+// MARK: - PUSH Score Detail
+
+public struct PUSHScoreDetailPayload: Codable, Sendable {
+    public let totalScore: Int
+    public let lengthTimesWidthCm2: Double
+    public let lengthTimesWidthSubScore: Int
+    public let exudateAmount: String
+    public let exudateSubScore: Int
+    public let tissueType: String
+    public let tissueSubScore: Int
+
+    enum CodingKeys: String, CodingKey {
+        case totalScore = "total_score"
+        case lengthTimesWidthCm2 = "length_times_width_cm2"
+        case lengthTimesWidthSubScore = "length_times_width_sub_score"
+        case exudateAmount = "exudate_amount"
+        case exudateSubScore = "exudate_sub_score"
+        case tissueType = "tissue_type"
+        case tissueSubScore = "tissue_sub_score"
+    }
+
+    public init(
+        totalScore: Int,
+        lengthTimesWidthCm2: Double,
+        lengthTimesWidthSubScore: Int,
+        exudateAmount: String,
+        exudateSubScore: Int,
+        tissueType: String,
+        tissueSubScore: Int
+    ) {
+        self.totalScore = totalScore
+        self.lengthTimesWidthCm2 = lengthTimesWidthCm2
+        self.lengthTimesWidthSubScore = lengthTimesWidthSubScore
+        self.exudateAmount = exudateAmount
+        self.exudateSubScore = exudateSubScore
+        self.tissueType = tissueType
+        self.tissueSubScore = tissueSubScore
+    }
+}
+
+// MARK: - Clinical Assessment
+
+public struct ClinicalAssessmentPayload: Codable, Sendable {
+    public let woundBed: WoundBedPayload
+    public let exudate: ExudatePayload
+    public let surroundingSkin: [String]
+    public let painLevel: Int?
+    public let painTiming: String?
+    public let odor: String
+    public let clinicalNotes: String
+
+    enum CodingKeys: String, CodingKey {
+        case woundBed = "wound_bed"
+        case exudate
+        case surroundingSkin = "surrounding_skin"
+        case painLevel = "pain_level"
+        case painTiming = "pain_timing"
+        case odor
+        case clinicalNotes = "clinical_notes"
+    }
+
+    public init(
+        woundBed: WoundBedPayload,
+        exudate: ExudatePayload,
+        surroundingSkin: [String],
+        painLevel: Int?,
+        painTiming: String?,
+        odor: String,
+        clinicalNotes: String
+    ) {
+        self.woundBed = woundBed
+        self.exudate = exudate
+        self.surroundingSkin = surroundingSkin
+        self.painLevel = painLevel
+        self.painTiming = painTiming
+        self.odor = odor
+        self.clinicalNotes = clinicalNotes
+    }
+}
+
+public struct WoundBedPayload: Codable, Sendable {
+    public let granulationPercent: Int
+    public let sloughPercent: Int
+    public let necroticPercent: Int
+    public let epithelialPercent: Int
+    public let otherPercent: Int
+
+    enum CodingKeys: String, CodingKey {
+        case granulationPercent = "granulation_pct"
+        case sloughPercent = "slough_pct"
+        case necroticPercent = "necrotic_pct"
+        case epithelialPercent = "epithelial_pct"
+        case otherPercent = "other_pct"
+    }
+
+    public init(
+        granulationPercent: Int,
+        sloughPercent: Int,
+        necroticPercent: Int,
+        epithelialPercent: Int,
+        otherPercent: Int
+    ) {
+        self.granulationPercent = granulationPercent
+        self.sloughPercent = sloughPercent
+        self.necroticPercent = necroticPercent
+        self.epithelialPercent = epithelialPercent
+        self.otherPercent = otherPercent
+    }
+}
+
+public struct ExudatePayload: Codable, Sendable {
+    public let amount: String
+    public let type: String
+    public let color: String
+
+    public init(amount: String, type: String, color: String) {
+        self.amount = amount
+        self.type = type
+        self.color = color
     }
 }
 

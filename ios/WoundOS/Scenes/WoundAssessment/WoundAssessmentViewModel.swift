@@ -186,7 +186,13 @@ final class WoundAssessmentViewModel: ObservableObject {
                     category: .storage
                 )
 
-                let uploadMsg = await self.uploadToReplit(scan: updatedScan, manualMeasurements: manualMeasurements, verifiedUser: verifiedUser)
+                let uploadMsg = await self.uploadToReplit(
+                    scan: updatedScan,
+                    assessment: assessment,
+                    encounter: encounter,
+                    manualMeasurements: manualMeasurements,
+                    verifiedUser: verifiedUser
+                )
 
                 isSaving = false
                 onAssessmentComplete?(assessment)
@@ -238,7 +244,13 @@ final class WoundAssessmentViewModel: ObservableObject {
     }
 
     @MainActor
-    private func uploadToReplit(scan: WoundScan, manualMeasurements: ManualMeasurements?, verifiedUser: VerifiedUser?) async -> String? {
+    private func uploadToReplit(
+        scan: WoundScan,
+        assessment: WoundAssessment,
+        encounter: Encounter,
+        manualMeasurements: ManualMeasurements?,
+        verifiedUser: VerifiedUser?
+    ) async -> String? {
         guard let token = tokenStore.loadToken(),
               let baseURLString = tokenStore.loadBaseURL(),
               let baseURL = URL(string: baseURLString),
@@ -248,6 +260,9 @@ final class WoundAssessmentViewModel: ObservableObject {
         }
 
         let m = scan.primaryMeasurement
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
         let manualPayload: ManualMeasurementsPayload? = manualMeasurements.map {
             ManualMeasurementsPayload(
                 lengthCm: $0.lengthCm,
@@ -275,14 +290,56 @@ final class WoundAssessmentViewModel: ObservableObject {
             )
         }
 
+        let encounterPayload = EncounterContextPayload(
+            encounterId: encounter.id.uuidString.lowercased(),
+            assessmentId: assessment.id.uuidString.lowercased(),
+            nurseId: encounter.nurseId,
+            facilityId: encounter.facilityId,
+            visitDate: dateFormatter.string(from: encounter.visitDate),
+            assessedAt: dateFormatter.string(from: assessment.assessedAt)
+        )
+
+        let pushDetail = PUSHScoreDetailPayload(
+            totalScore: scan.pushScore.totalScore,
+            lengthTimesWidthCm2: scan.pushScore.lengthTimesWidthCm2,
+            lengthTimesWidthSubScore: scan.pushScore.lengthTimesWidthSubScore,
+            exudateAmount: scan.pushScore.exudateAmount.displayName,
+            exudateSubScore: scan.pushScore.exudateAmount.subScore,
+            tissueType: scan.pushScore.tissueType.displayName,
+            tissueSubScore: scan.pushScore.tissueType.subScore
+        )
+
+        let clinicalAssessmentPayload = ClinicalAssessmentPayload(
+            woundBed: WoundBedPayload(
+                granulationPercent: assessment.woundBed.granulationPercent,
+                sloughPercent: assessment.woundBed.sloughPercent,
+                necroticPercent: assessment.woundBed.necroticPercent,
+                epithelialPercent: assessment.woundBed.epithelialPercent,
+                otherPercent: assessment.woundBed.otherPercent
+            ),
+            exudate: ExudatePayload(
+                amount: assessment.exudate.amount.displayName,
+                type: assessment.exudate.type.displayName,
+                color: assessment.exudate.color.displayName
+            ),
+            surroundingSkin: assessment.surroundingSkin.conditions.map(\.displayName),
+            painLevel: assessment.pain?.level,
+            painTiming: assessment.pain?.timing.displayName,
+            odor: assessment.odor.displayName,
+            clinicalNotes: assessment.clinicalNotes
+        )
+
         let payload = CaptureUploadPayload(
             captureId: scan.id,
             capturedAt: scan.capturedAt,
             device: DevicePayload.current(),
             capturedBy: CapturedByPayload(from: user),
             patient: patientPayload,
+            encounter: encounterPayload,
             pushScore: Double(scan.pushScore.totalScore),
-            notes: "",
+            pushScoreDetail: pushDetail,
+            clinicalAssessment: clinicalAssessmentPayload,
+            notes: assessment.clinicalNotes,
             segmentation: SegmentationPayload(
                 confidence: 0.95,
                 maskCoveragePct: 0.0
@@ -292,7 +349,9 @@ final class WoundAssessmentViewModel: ObservableObject {
                 widthCm: m.widthMm / 10.0,
                 areaCm2: m.areaCm2,
                 perimeterCm: m.perimeterMm / 10.0,
-                depthCm: m.maxDepthMm / 10.0
+                depthCm: m.maxDepthMm / 10.0,
+                meanDepthCm: m.meanDepthMm / 10.0,
+                volumeMl: m.volumeMl
             ),
             manualMeasurements: manualPayload,
             lidarMetadata: LiDARMetadataPayload(
