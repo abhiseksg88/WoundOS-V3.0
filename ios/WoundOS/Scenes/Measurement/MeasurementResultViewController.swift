@@ -229,6 +229,8 @@ final class MeasurementResultViewController: UIViewController {
         ])
 
         measurementStack.addArrangedSubview(
+            WOMeasurementRow(label: "Area", value: viewModel.areaValue, unit: viewModel.areaUnit))
+        measurementStack.addArrangedSubview(
             WOMeasurementRow(label: "Length", value: viewModel.lengthValue, unit: viewModel.lengthUnit))
         measurementStack.addArrangedSubview(
             WOMeasurementRow(label: "Width", value: viewModel.widthValue, unit: viewModel.widthUnit))
