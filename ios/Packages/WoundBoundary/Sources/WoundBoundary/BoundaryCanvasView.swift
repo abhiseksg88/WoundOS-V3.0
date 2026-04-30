@@ -47,7 +47,7 @@ public final class BoundaryCanvasView: UIView {
     public var simplificationEpsilon: CGFloat = 2.0
 
     /// Proximity threshold to auto-close polygon (points)
-    public var closeProximityThreshold: CGFloat = 25.0
+    public var closeProximityThreshold: CGFloat = 30.0
 
     // MARK: - Internal State
 
@@ -57,9 +57,15 @@ public final class BoundaryCanvasView: UIView {
 
     // Shape layers for rendering
     private let boundaryShapeLayer = CAShapeLayer()
+    private let inProgressStrokeLayer = CAShapeLayer()
     private let boundingBoxLayer = CAShapeLayer()
     private let vertexLayer = CALayer()
     private let tapPointLayer = CAShapeLayer()
+    private let closeHintLayer = CAShapeLayer()
+
+    // Magnifier loupe
+    private let magnifierView = MagnifierLoupeView()
+    private weak var sourceViewForMagnifier: UIView?
 
     // MARK: - Init
 
@@ -84,6 +90,13 @@ public final class BoundaryCanvasView: UIView {
         boundaryShapeLayer.lineCap = .round
         layer.addSublayer(boundaryShapeLayer)
 
+        inProgressStrokeLayer.fillColor = UIColor.clear.cgColor
+        inProgressStrokeLayer.strokeColor = strokeColor.cgColor
+        inProgressStrokeLayer.lineWidth = 3.0
+        inProgressStrokeLayer.lineJoin = .round
+        inProgressStrokeLayer.lineCap = .round
+        layer.addSublayer(inProgressStrokeLayer)
+
         boundingBoxLayer.fillColor = UIColor.clear.cgColor
         boundingBoxLayer.strokeColor = UIColor.systemYellow.withAlphaComponent(0.7).cgColor
         boundingBoxLayer.lineWidth = 1.5
@@ -96,7 +109,21 @@ public final class BoundaryCanvasView: UIView {
         tapPointLayer.lineWidth = 2.0
         layer.addSublayer(tapPointLayer)
 
+        closeHintLayer.fillColor = UIColor.systemGreen.withAlphaComponent(0.3).cgColor
+        closeHintLayer.strokeColor = UIColor.systemGreen.withAlphaComponent(0.6).cgColor
+        closeHintLayer.lineWidth = 2.0
+        closeHintLayer.lineDashPattern = [4, 3]
+        layer.addSublayer(closeHintLayer)
+
         layer.addSublayer(vertexLayer)
+
+        magnifierView.isHidden = true
+        addSubview(magnifierView)
+    }
+
+    /// Set the view that the magnifier captures content from (typically the parent imageView).
+    public func setMagnifierSource(_ view: UIView) {
+        sourceViewForMagnifier = view
     }
 
     // MARK: - Public API
@@ -126,13 +153,15 @@ public final class BoundaryCanvasView: UIView {
         boundaryPoints.removeAll()
         isDrawingFreeform = false
         boundingBoxLayer.path = nil
+        inProgressStrokeLayer.path = nil
+        closeHintLayer.path = nil
         updateRendering()
         delegate?.canvasDidClearBoundary()
     }
 
     /// Remove the last vertex in polygon mode
     public func undoLastVertex() {
-        guard drawingMode == .polygon, !boundaryPoints.isEmpty else { return }
+        guard !boundaryPoints.isEmpty else { return }
         boundaryPoints.removeLast()
         updateRendering()
         delegate?.canvasDidUpdateBoundary(boundaryPoints)
@@ -151,11 +180,9 @@ public final class BoundaryCanvasView: UIView {
             delegate?.canvasDidPlaceTapPoint(location)
 
         case .polygon:
-            // Check if close enough to first point to auto-close
             if boundaryPoints.count >= 3,
                let first = boundaryPoints.first,
                location.distance(to: first) < closeProximityThreshold {
-                // Close the polygon
                 updateRendering()
                 delegate?.canvasDidFinalizeBoundary(boundaryPoints)
             } else {
@@ -168,6 +195,7 @@ public final class BoundaryCanvasView: UIView {
             boundaryPoints = [location]
             isDrawingFreeform = true
             updateRendering()
+            showMagnifier(at: location)
         }
     }
 
@@ -177,33 +205,31 @@ public final class BoundaryCanvasView: UIView {
 
         let location = touch.location(in: self)
 
-        // Only add point if it's far enough from the last one (reduces noise)
         if let last = boundaryPoints.last, location.distance(to: last) > 3.0 {
             boundaryPoints.append(location)
-            updateRendering()
+            updateInProgressStroke()
+            updateCloseHint(currentPoint: location)
         }
+        updateMagnifier(at: location)
     }
 
     public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        hideMagnifier()
+        inProgressStrokeLayer.path = nil
+        closeHintLayer.path = nil
+
         guard drawingMode == .freeform, isDrawingFreeform else { return }
         isDrawingFreeform = false
 
         guard boundaryPoints.count >= 3 else {
-            // Too few points for a valid boundary — clear and let user retry
             boundaryPoints.removeAll()
             updateRendering()
             return
         }
 
-        // Auto-close the loop: if the last point is far from the first,
-        // connect back so the enclosed area matches what was drawn.
-        // Without this, the path.close() draws a straight line from the
-        // lift-off point to the start, causing the boundary to "expand."
         if let first = boundaryPoints.first, let last = boundaryPoints.last {
             let gap = first.distance(to: last)
             if gap > closeProximityThreshold {
-                // Walk back toward the start by sampling intermediate points
-                // along the straight line to avoid a sudden gap.
                 let steps = max(2, Int(gap / 8.0))
                 for i in 1...steps {
                     let t = CGFloat(i) / CGFloat(steps)
@@ -216,7 +242,6 @@ public final class BoundaryCanvasView: UIView {
             }
         }
 
-        // Simplify the freeform path using Douglas-Peucker
         let simplified = douglasPeucker(boundaryPoints, epsilon: simplificationEpsilon)
         boundaryPoints = simplified
 
@@ -226,6 +251,77 @@ public final class BoundaryCanvasView: UIView {
 
     public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         isDrawingFreeform = false
+        hideMagnifier()
+        inProgressStrokeLayer.path = nil
+        closeHintLayer.path = nil
+    }
+
+    // MARK: - In-Progress Stroke (real-time feedback during freeform drawing)
+
+    private func updateInProgressStroke() {
+        guard isDrawingFreeform, boundaryPoints.count >= 2 else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let path = UIBezierPath()
+        path.move(to: boundaryPoints[0])
+        for i in 1..<boundaryPoints.count {
+            path.addLine(to: boundaryPoints[i])
+        }
+        inProgressStrokeLayer.path = path.cgPath
+        CATransaction.commit()
+    }
+
+    // MARK: - Close Hint (visual guide when near start point)
+
+    private func updateCloseHint(currentPoint: CGPoint) {
+        guard let first = boundaryPoints.first, boundaryPoints.count >= 3 else {
+            closeHintLayer.path = nil
+            return
+        }
+
+        let distance = currentPoint.distance(to: first)
+        if distance < closeProximityThreshold * 2 {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+
+            let hintPath = UIBezierPath()
+            hintPath.move(to: currentPoint)
+            hintPath.addLine(to: first)
+
+            let ringRadius: CGFloat = closeProximityThreshold
+            let ringRect = CGRect(
+                x: first.x - ringRadius,
+                y: first.y - ringRadius,
+                width: ringRadius * 2,
+                height: ringRadius * 2
+            )
+            hintPath.append(UIBezierPath(ovalIn: ringRect))
+
+            let alpha = max(0.2, 1.0 - (distance / (closeProximityThreshold * 2)))
+            closeHintLayer.strokeColor = UIColor.systemGreen.withAlphaComponent(0.6 * alpha).cgColor
+            closeHintLayer.fillColor = UIColor.systemGreen.withAlphaComponent(0.15 * alpha).cgColor
+            closeHintLayer.path = hintPath.cgPath
+            CATransaction.commit()
+        } else {
+            closeHintLayer.path = nil
+        }
+    }
+
+    // MARK: - Magnifier
+
+    private func showMagnifier(at point: CGPoint) {
+        guard let source = sourceViewForMagnifier ?? superview else { return }
+        magnifierView.isHidden = false
+        magnifierView.updateContent(at: point, in: source, canvasView: self)
+    }
+
+    private func updateMagnifier(at point: CGPoint) {
+        guard let source = sourceViewForMagnifier ?? superview else { return }
+        magnifierView.updateContent(at: point, in: source, canvasView: self)
+    }
+
+    private func hideMagnifier() {
+        magnifierView.isHidden = true
     }
 
     // MARK: - Rendering
@@ -244,7 +340,6 @@ public final class BoundaryCanvasView: UIView {
                 endAngle: .pi * 2,
                 clockwise: true
             )
-            // Add crosshair
             path.move(to: CGPoint(x: tp.x - radius * 1.5, y: tp.y))
             path.addLine(to: CGPoint(x: tp.x + radius * 1.5, y: tp.y))
             path.move(to: CGPoint(x: tp.x, y: tp.y - radius * 1.5))
@@ -254,24 +349,26 @@ public final class BoundaryCanvasView: UIView {
             tapPointLayer.path = nil
         }
 
-        // Render boundary
-        if boundaryPoints.count >= 2 {
+        // Render boundary (filled only when NOT actively drawing)
+        if boundaryPoints.count >= 2 && !isDrawingFreeform {
             let path = UIBezierPath()
             path.move(to: boundaryPoints[0])
             for i in 1..<boundaryPoints.count {
                 path.addLine(to: boundaryPoints[i])
             }
-            // Close the path if finalized (not actively drawing freeform)
-            if !isDrawingFreeform && boundaryPoints.count >= 3 {
+            if boundaryPoints.count >= 3 {
                 path.close()
             }
+            boundaryShapeLayer.fillColor = fillColor.cgColor
             boundaryShapeLayer.path = path.cgPath
+        } else if !isDrawingFreeform {
+            boundaryShapeLayer.path = nil
         } else {
             boundaryShapeLayer.path = nil
         }
 
-        // Render bounding box around boundary
-        if boundaryPoints.count >= 3 {
+        // Render bounding box around finalized boundary
+        if boundaryPoints.count >= 3 && !isDrawingFreeform {
             let xs = boundaryPoints.map(\.x)
             let ys = boundaryPoints.map(\.y)
             if let minX = xs.min(), let maxX = xs.max(),
@@ -319,8 +416,6 @@ public final class BoundaryCanvasView: UIView {
 
     // MARK: - Douglas-Peucker Simplification
 
-    /// Reduce point count while preserving shape. Essential for freeform traces
-    /// that can produce hundreds of raw touch points.
     private func douglasPeucker(_ points: [CGPoint], epsilon: CGFloat) -> [CGPoint] {
         guard points.count > 2,
               let start = points.first,
@@ -357,6 +452,85 @@ public final class BoundaryCanvasView: UIView {
 
         let num = abs(dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x)
         return num / lineLength
+    }
+}
+
+// MARK: - Magnifier Loupe View
+
+private final class MagnifierLoupeView: UIView {
+
+    private let magnification: CGFloat = 2.0
+    private let loupeSize: CGFloat = 90.0
+    private let loupeOffset: CGFloat = 80.0
+
+    private let contentImageView = UIImageView()
+    private let crosshairLayer = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: .zero)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError()
+    }
+
+    private func setup() {
+        bounds = CGRect(x: 0, y: 0, width: loupeSize, height: loupeSize)
+        layer.cornerRadius = loupeSize / 2
+        layer.masksToBounds = true
+        layer.borderWidth = 2.5
+        layer.borderColor = UIColor.white.cgColor
+
+        layer.shadowColor = UIColor.black.cgColor
+        layer.shadowOpacity = 0.4
+        layer.shadowOffset = CGSize(width: 0, height: 2)
+        layer.shadowRadius = 6
+        clipsToBounds = false
+
+        contentImageView.frame = bounds
+        contentImageView.contentMode = .scaleToFill
+        contentImageView.clipsToBounds = true
+        contentImageView.layer.cornerRadius = loupeSize / 2
+        addSubview(contentImageView)
+
+        let crossPath = UIBezierPath()
+        let center = loupeSize / 2
+        let armLen: CGFloat = 8
+        crossPath.move(to: CGPoint(x: center - armLen, y: center))
+        crossPath.addLine(to: CGPoint(x: center + armLen, y: center))
+        crossPath.move(to: CGPoint(x: center, y: center - armLen))
+        crossPath.addLine(to: CGPoint(x: center, y: center + armLen))
+        crosshairLayer.path = crossPath.cgPath
+        crosshairLayer.strokeColor = UIColor.white.withAlphaComponent(0.8).cgColor
+        crosshairLayer.lineWidth = 1.0
+        layer.addSublayer(crosshairLayer)
+    }
+
+    func updateContent(at touchPoint: CGPoint, in sourceView: UIView, canvasView: UIView) {
+        let captureRadius = loupeSize / (2 * magnification)
+        let captureRect = CGRect(
+            x: touchPoint.x - captureRadius,
+            y: touchPoint.y - captureRadius,
+            width: captureRadius * 2,
+            height: captureRadius * 2
+        )
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: captureRadius * 2, height: captureRadius * 2))
+        let snapshot = renderer.image { ctx in
+            ctx.cgContext.translateBy(x: -captureRect.origin.x, y: -captureRect.origin.y)
+            sourceView.layer.render(in: ctx.cgContext)
+            canvasView.layer.render(in: ctx.cgContext)
+        }
+        contentImageView.image = snapshot
+
+        var loupeCenter = CGPoint(x: touchPoint.x, y: touchPoint.y - loupeOffset)
+        if loupeCenter.y - loupeSize / 2 < 0 {
+            loupeCenter.y = touchPoint.y + loupeOffset
+        }
+        loupeCenter.x = max(loupeSize / 2, min(loupeCenter.x, canvasView.bounds.width - loupeSize / 2))
+
+        center = loupeCenter
     }
 }
 

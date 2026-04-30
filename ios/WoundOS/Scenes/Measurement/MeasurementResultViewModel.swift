@@ -46,9 +46,12 @@ final class MeasurementResultViewModel: ObservableObject {
         UIImage(data: scan.captureData.rgbImageData)
     }
 
-    /// Boundary points for the overlay (normalized 0...1 → CGPoint)
+    /// Boundary points for the overlay in display-normalized portrait coordinates (0...1).
+    /// points2D are stored in sensor-normalized landscape-right space.
+    /// Inverse of ImageViewGeometry.viewToSensorNormalized:
+    ///   display_x = sensor_y,  display_y = 1 - sensor_x
     var boundaryPointsCG: [CGPoint] {
-        scan.nurseBoundary.points2D.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+        scan.nurseBoundary.points2D.map { CGPoint(x: CGFloat($0.y), y: CGFloat(1.0 - $0.x)) }
     }
 
     // MARK: - Formatted Values (matching screenshot style: value + unit separate)

@@ -89,11 +89,30 @@ final class BoundaryDrawingViewController: UIViewController {
     }()
 
     private lazy var undoButton: UIButton = {
-        makeBarButton(icon: "arrow.uturn.backward", title: "Undo", action: #selector(undoTapped))
+        let btn = makeBarButton(icon: "arrow.uturn.backward", title: "Undo", action: #selector(undoTapped))
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(undoLongPressed(_:)))
+        longPress.minimumPressDuration = 0.8
+        btn.addGestureRecognizer(longPress)
+        return btn
     }()
 
     private lazy var clearButton: UIButton = {
         makeBarButton(icon: "trash", title: "Clear", action: #selector(clearTapped))
+    }()
+
+    // Zoom state
+    private var currentZoomScale: CGFloat = 1.0
+    private lazy var zoomLabel: UILabel = {
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
+        label.textColor = .white
+        label.textAlignment = .center
+        label.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        label.layer.cornerRadius = 6
+        label.clipsToBounds = true
+        label.alpha = 0
+        return label
     }()
 
     private lazy var measureButton: UIButton = {
@@ -214,9 +233,12 @@ final class BoundaryDrawingViewController: UIViewController {
         setupUI()
         bindViewModel()
         imageView.image = viewModel.capturedImage
+        canvasView.setMagnifierSource(imageView)
 
-        // If the environment has no segmenter (pre-iOS-17 or DI returned nil),
-        // disable + hide the "Auto" segment and fall back to Polygon default.
+        // Pinch-to-zoom
+        let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
+        view.addGestureRecognizer(pinch)
+
         if !viewModel.autoSegmenterAvailable {
             modeToggle.setEnabled(false, forSegmentAt: 0)
             modeToggle.selectedSegmentIndex = 1
@@ -225,7 +247,6 @@ final class BoundaryDrawingViewController: UIViewController {
             modeToggle.selectedSegmentIndex = 0
         }
 
-        // Dismiss error banner on tap
         errorBanner.addGestureRecognizer(
             UITapGestureRecognizer(target: self, action: #selector(dismissErrorBanner))
         )
@@ -263,6 +284,7 @@ final class BoundaryDrawingViewController: UIViewController {
         view.addSubview(warningBanner)
         view.addSubview(errorBanner)
         view.addSubview(processingOverlay)
+        view.addSubview(zoomLabel)
 
         if DeveloperMode.isEnabled {
             view.addSubview(woundTypeControl)
@@ -364,6 +386,12 @@ final class BoundaryDrawingViewController: UIViewController {
             processingOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             processingOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             processingOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            // Zoom label
+            zoomLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            zoomLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 50),
+            zoomLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 50),
+            zoomLabel.heightAnchor.constraint(equalToConstant: 28),
         ])
     }
 
@@ -546,9 +574,36 @@ final class BoundaryDrawingViewController: UIViewController {
         canvasView.undoLastVertex()
     }
 
+    @objc private func undoLongPressed(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        canvasView.clearAll()
+        viewModel.clearBoundary()
+    }
+
     @objc private func clearTapped() {
         canvasView.clearAll()
         viewModel.clearBoundary()
+    }
+
+    @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+        switch gesture.state {
+        case .changed:
+            let newScale = (currentZoomScale * gesture.scale).clamped(to: 1.0...3.0)
+            let transform = CGAffineTransform(scaleX: newScale, y: newScale)
+            imageView.transform = transform
+            canvasView.transform = transform
+            zoomLabel.text = " \(String(format: "%.1f", newScale))× "
+            zoomLabel.alpha = 1
+        case .ended, .cancelled:
+            currentZoomScale = (currentZoomScale * gesture.scale).clamped(to: 1.0...3.0)
+            gesture.scale = 1.0
+            UIView.animate(withDuration: 0.8, delay: 0.5) {
+                self.zoomLabel.alpha = 0
+            }
+        default:
+            break
+        }
     }
 
     @objc private func dismissErrorBanner() {
@@ -642,5 +697,13 @@ extension BoundaryDrawingViewController: BoundaryCanvasDelegate {
 
     func canvasDidClearBoundary() {
         viewModel.clearBoundary()
+    }
+}
+
+// MARK: - Comparable Clamped
+
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }
