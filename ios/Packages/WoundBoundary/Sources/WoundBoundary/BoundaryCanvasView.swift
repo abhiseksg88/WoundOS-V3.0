@@ -63,9 +63,6 @@ public final class BoundaryCanvasView: UIView {
     private let tapPointLayer = CAShapeLayer()
     private let closeHintLayer = CAShapeLayer()
 
-    // Magnifier loupe
-    private let magnifierView = MagnifierLoupeView()
-    private weak var sourceViewForMagnifier: UIView?
 
     // MARK: - Init
 
@@ -116,14 +113,6 @@ public final class BoundaryCanvasView: UIView {
         layer.addSublayer(closeHintLayer)
 
         layer.addSublayer(vertexLayer)
-
-        magnifierView.isHidden = true
-        addSubview(magnifierView)
-    }
-
-    /// Set the view that the magnifier captures content from (typically the parent imageView).
-    public func setMagnifierSource(_ view: UIView) {
-        sourceViewForMagnifier = view
     }
 
     // MARK: - Public API
@@ -195,7 +184,6 @@ public final class BoundaryCanvasView: UIView {
             boundaryPoints = [location]
             isDrawingFreeform = true
             updateRendering()
-            showMagnifier(at: location)
         }
     }
 
@@ -210,11 +198,9 @@ public final class BoundaryCanvasView: UIView {
             updateInProgressStroke()
             updateCloseHint(currentPoint: location)
         }
-        updateMagnifier(at: location)
     }
 
     public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        hideMagnifier()
         inProgressStrokeLayer.path = nil
         closeHintLayer.path = nil
 
@@ -251,7 +237,6 @@ public final class BoundaryCanvasView: UIView {
 
     public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         isDrawingFreeform = false
-        hideMagnifier()
         inProgressStrokeLayer.path = nil
         closeHintLayer.path = nil
     }
@@ -305,23 +290,6 @@ public final class BoundaryCanvasView: UIView {
         } else {
             closeHintLayer.path = nil
         }
-    }
-
-    // MARK: - Magnifier
-
-    private func showMagnifier(at point: CGPoint) {
-        guard let source = sourceViewForMagnifier ?? superview else { return }
-        magnifierView.isHidden = false
-        magnifierView.updateContent(at: point, in: source, canvasView: self)
-    }
-
-    private func updateMagnifier(at point: CGPoint) {
-        guard let source = sourceViewForMagnifier ?? superview else { return }
-        magnifierView.updateContent(at: point, in: source, canvasView: self)
-    }
-
-    private func hideMagnifier() {
-        magnifierView.isHidden = true
     }
 
     // MARK: - Rendering
@@ -452,85 +420,6 @@ public final class BoundaryCanvasView: UIView {
 
         let num = abs(dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x)
         return num / lineLength
-    }
-}
-
-// MARK: - Magnifier Loupe View
-
-private final class MagnifierLoupeView: UIView {
-
-    private let magnification: CGFloat = 2.0
-    private let loupeSize: CGFloat = 90.0
-    private let loupeOffset: CGFloat = 80.0
-
-    private let contentImageView = UIImageView()
-    private let crosshairLayer = CAShapeLayer()
-
-    override init(frame: CGRect) {
-        super.init(frame: .zero)
-        setup()
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError()
-    }
-
-    private func setup() {
-        bounds = CGRect(x: 0, y: 0, width: loupeSize, height: loupeSize)
-        layer.cornerRadius = loupeSize / 2
-        layer.masksToBounds = true
-        layer.borderWidth = 2.5
-        layer.borderColor = UIColor.white.cgColor
-
-        layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.4
-        layer.shadowOffset = CGSize(width: 0, height: 2)
-        layer.shadowRadius = 6
-        clipsToBounds = false
-
-        contentImageView.frame = bounds
-        contentImageView.contentMode = .scaleToFill
-        contentImageView.clipsToBounds = true
-        contentImageView.layer.cornerRadius = loupeSize / 2
-        addSubview(contentImageView)
-
-        let crossPath = UIBezierPath()
-        let center = loupeSize / 2
-        let armLen: CGFloat = 8
-        crossPath.move(to: CGPoint(x: center - armLen, y: center))
-        crossPath.addLine(to: CGPoint(x: center + armLen, y: center))
-        crossPath.move(to: CGPoint(x: center, y: center - armLen))
-        crossPath.addLine(to: CGPoint(x: center, y: center + armLen))
-        crosshairLayer.path = crossPath.cgPath
-        crosshairLayer.strokeColor = UIColor.white.withAlphaComponent(0.8).cgColor
-        crosshairLayer.lineWidth = 1.0
-        layer.addSublayer(crosshairLayer)
-    }
-
-    func updateContent(at touchPoint: CGPoint, in sourceView: UIView, canvasView: UIView) {
-        let captureRadius = loupeSize / (2 * magnification)
-        let captureRect = CGRect(
-            x: touchPoint.x - captureRadius,
-            y: touchPoint.y - captureRadius,
-            width: captureRadius * 2,
-            height: captureRadius * 2
-        )
-
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: captureRadius * 2, height: captureRadius * 2))
-        let snapshot = renderer.image { ctx in
-            ctx.cgContext.translateBy(x: -captureRect.origin.x, y: -captureRect.origin.y)
-            sourceView.layer.render(in: ctx.cgContext)
-            canvasView.layer.render(in: ctx.cgContext)
-        }
-        contentImageView.image = snapshot
-
-        var loupeCenter = CGPoint(x: touchPoint.x, y: touchPoint.y - loupeOffset)
-        if loupeCenter.y - loupeSize / 2 < 0 {
-            loupeCenter.y = touchPoint.y + loupeOffset
-        }
-        loupeCenter.x = max(loupeSize / 2, min(loupeCenter.x, canvasView.bounds.width - loupeSize / 2))
-
-        center = loupeCenter
     }
 }
 

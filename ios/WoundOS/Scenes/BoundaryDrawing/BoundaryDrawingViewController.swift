@@ -233,7 +233,6 @@ final class BoundaryDrawingViewController: UIViewController {
         setupUI()
         bindViewModel()
         imageView.image = viewModel.capturedImage
-        canvasView.setMagnifierSource(imageView)
 
         // Pinch-to-zoom
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
@@ -329,8 +328,8 @@ final class BoundaryDrawingViewController: UIViewController {
             canvasView.trailingAnchor.constraint(equalTo: imageView.trailingAnchor),
             canvasView.bottomAnchor.constraint(equalTo: imageView.bottomAnchor),
 
-            // Instruction card — top center on image
-            instructionCard.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: WOSpacing.sm),
+            // Instruction card — bottom of image area, above warning banner
+            instructionCard.bottomAnchor.constraint(equalTo: bottomBar.topAnchor, constant: -WOSpacing.sm),
             instructionCard.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             instructionCard.heightAnchor.constraint(equalToConstant: 34),
 
@@ -684,10 +683,12 @@ extension BoundaryDrawingViewController: BoundaryCanvasDelegate {
     func canvasDidPlaceTapPoint(_ point: CGPoint) {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         viewModel.didPlaceTapPoint(point, in: currentGeometry)
+        hideInstructionCard()
     }
 
     func canvasDidUpdateBoundary(_ points: [CGPoint]) {
         viewModel.didUpdateBoundary(points, in: currentGeometry)
+        hideInstructionCard()
     }
 
     func canvasDidFinalizeBoundary(_ points: [CGPoint]) {
@@ -697,6 +698,23 @@ extension BoundaryDrawingViewController: BoundaryCanvasDelegate {
 
     func canvasDidClearBoundary() {
         viewModel.clearBoundary()
+        showInstructionCard()
+    }
+
+    private func hideInstructionCard() {
+        guard !instructionCard.isHidden else { return }
+        UIView.animate(withDuration: 0.25) {
+            self.instructionCard.alpha = 0
+        } completion: { _ in
+            self.instructionCard.isHidden = true
+        }
+    }
+
+    private func showInstructionCard() {
+        instructionCard.isHidden = false
+        UIView.animate(withDuration: 0.25) {
+            self.instructionCard.alpha = 1
+        }
     }
 }
 
