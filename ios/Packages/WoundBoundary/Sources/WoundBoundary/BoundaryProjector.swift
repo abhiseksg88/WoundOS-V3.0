@@ -54,9 +54,15 @@ public final class BoundaryProjector {
             throw MeasurementError.insufficientBoundaryPoints(count: 0, minimum: 3)
         }
 
+        let effectiveIntrinsics = validateAndCorrectIntrinsics(
+            intrinsics,
+            imageWidth: imageWidth,
+            imageHeight: imageHeight
+        )
+
         logger.info("project() — \(points2D.count) points, image=\(imageWidth)x\(imageHeight), mesh=\(vertices.count) verts/\(faces.count) faces, depth=\(depthWidth)x\(depthHeight)")
         let cameraPosition = cameraTransform.translation
-        let invIntrinsics = intrinsics.inverse
+        let invIntrinsics = effectiveIntrinsics.inverse
 
         var projected = [SIMD3<Float>]()
         projected.reserveCapacity(points2D.count)
@@ -92,7 +98,7 @@ public final class BoundaryProjector {
                     depthWidth: depthWidth,
                     depthHeight: depthHeight,
                     confidenceMap: confidenceMap,
-                    intrinsics: intrinsics,
+                    intrinsics: effectiveIntrinsics,
                     cameraTransform: cameraTransform,
                     imageWidth: imageWidth,
                     imageHeight: imageHeight
@@ -163,6 +169,48 @@ public final class BoundaryProjector {
         }
 
         return nearestPoint
+    }
+
+    // MARK: - Intrinsics Validation
+
+    /// Detect and correct intrinsics/resolution mismatches.
+    /// ARKit's frame.camera.intrinsics should be calibrated for the actual
+    /// capturedImage resolution, but on some device/format combinations the
+    /// principal point (cx, cy) falls outside the expected range, indicating
+    /// the intrinsics are calibrated for a different resolution.
+    private static func validateAndCorrectIntrinsics(
+        _ intrinsics: simd_float3x3,
+        imageWidth: Int,
+        imageHeight: Int
+    ) -> simd_float3x3 {
+        let fx = intrinsics[0][0]
+        let fy = intrinsics[1][1]
+        let cx = intrinsics[2][0]
+        let cy = intrinsics[2][1]
+
+        let halfW = Float(imageWidth) / 2.0
+        let halfH = Float(imageHeight) / 2.0
+
+        logger.info("INTRINSICS CHECK: fx=\(fx) fy=\(fy) cx=\(cx) cy=\(cy) | image=\(imageWidth)x\(imageHeight) halfW=\(halfW) halfH=\(halfH)")
+
+        let ratioX = cx / halfW
+        let ratioY = cy / halfH
+        logger.info("INTRINSICS CHECK: cx/halfW=\(String(format: "%.3f", ratioX)) cy/halfH=\(String(format: "%.3f", ratioY))")
+
+        // cx should be approximately imageWidth/2 (within 80%).
+        // If significantly off, the intrinsics are for a different resolution.
+        if ratioX > 1.8 || ratioX < 0.55 || ratioY > 1.8 || ratioY < 0.55 {
+            let scale = halfW / cx
+            logger.warning("INTRINSICS MISMATCH: cx=\(cx) vs expected≈\(halfW), cy=\(cy) vs expected≈\(halfH). Correcting by scale=\(scale)")
+
+            return simd_float3x3(
+                SIMD3<Float>(fx * scale, 0, 0),
+                SIMD3<Float>(0, fy * scale, 0),
+                SIMD3<Float>(cx * scale, cy * scale, 1)
+            )
+        }
+
+        return intrinsics
     }
 
     // MARK: - Depth Map Fallback (Confidence-Filtered)

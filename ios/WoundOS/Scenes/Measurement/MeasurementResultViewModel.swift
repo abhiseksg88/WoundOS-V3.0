@@ -43,7 +43,9 @@ final class MeasurementResultViewModel: ObservableObject {
     // MARK: - Wound Image
 
     var woundImage: UIImage? {
-        UIImage(data: scan.captureData.rgbImageData)
+        guard let raw = UIImage(data: scan.captureData.rgbImageData),
+              let cg = raw.cgImage else { return nil }
+        return UIImage(cgImage: cg, scale: 1.0, orientation: .right)
     }
 
     /// Boundary points for the overlay in display-normalized portrait coordinates (0...1).
@@ -212,13 +214,14 @@ final class MeasurementResultViewModel: ObservableObject {
             do {
                 CrashLogger.shared.log("Saving scan to local storage…", category: .storage)
                 try await storage.saveScan(scan)
-                CrashLogger.shared.log("Scan saved locally. Starting upload…", category: .storage)
-                isUploading = true
-                await uploadManager.enqueueUpload(scan: scan)
-                CrashLogger.shared.log("Upload enqueued successfully", category: .network)
+                CrashLogger.shared.log("Scan saved locally. Queuing upload in background.", category: .storage)
                 isSaving = false
-                isUploading = false
                 onSaveComplete?()
+
+                Task { [scan, uploadManager] in
+                    await uploadManager.enqueueUpload(scan: scan)
+                    CrashLogger.shared.log("Upload enqueued successfully", category: .network)
+                }
             } catch {
                 CrashLogger.shared.error("saveAndUpload failed", category: .storage, error: error)
                 isSaving = false

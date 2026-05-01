@@ -517,9 +517,30 @@ public struct ArtifactsPayload: Codable, Sendable {
     }
 
     public init(rgbImage: UIImage, maskImage: UIImage, overlayImage: UIImage) {
-        self.rgbImageBase64 = rgbImage.pngData()?.base64EncodedString() ?? ""
-        self.maskImageBase64 = maskImage.pngData()?.base64EncodedString() ?? ""
-        self.overlayImageBase64 = overlayImage.pngData()?.base64EncodedString() ?? ""
+        self.rgbImageBase64 = Self.optimizedJPEGBase64(rgbImage, maxDimension: 1920, quality: 0.75)
+        self.maskImageBase64 = ""
+        self.overlayImageBase64 = ""
+    }
+
+    private static func optimizedJPEGBase64(
+        _ image: UIImage,
+        maxDimension: CGFloat,
+        quality: CGFloat
+    ) -> String {
+        let size = image.size
+        let longestSide = max(size.width, size.height)
+        let targetImage: UIImage
+        if longestSide > maxDimension {
+            let scale = maxDimension / longestSide
+            let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+            let renderer = UIGraphicsImageRenderer(size: newSize)
+            targetImage = renderer.image { _ in
+                image.draw(in: CGRect(origin: .zero, size: newSize))
+            }
+        } else {
+            targetImage = image
+        }
+        return targetImage.jpegData(compressionQuality: quality)?.base64EncodedString() ?? ""
     }
 }
 

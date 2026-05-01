@@ -80,9 +80,10 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
             .filter({ $0.captureDevicePosition == .back })
             .max(by: { $0.imageResolution.width < $1.imageResolution.width }) {
             config.videoFormat = hiResFormat
+            logger.info("Selected hi-res format: \(hiResFormat.imageResolution.width)x\(hiResFormat.imageResolution.height)")
         }
 
-        logger.info("AR config: sceneReconstruction=mesh, frameSemantics=smoothedSceneDepth")
+        logger.info("AR config: sceneReconstruction=mesh, frameSemantics=smoothedSceneDepth, format=\(config.videoFormat.imageResolution.width)x\(config.videoFormat.imageResolution.height)")
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
         logger.info("ARSession.run() called successfully")
         #endif
@@ -143,6 +144,7 @@ public final class ARSessionManager: NSObject, CaptureProviderProtocol {
         // 5. Camera parameters
         let intrinsics = frame.camera.intrinsics
         let transform = frame.camera.transform
+        logger.info("Camera intrinsics: fx=\(intrinsics[0][0]) fy=\(intrinsics[1][1]) cx=\(intrinsics[2][0]) cy=\(intrinsics[2][1]) | image=\(imageWidth)x\(imageHeight) cx/halfW=\(String(format: "%.3f", intrinsics[2][0] / Float(imageWidth) * 2.0))")
 
         return CaptureSnapshot(
             rgbImageData: rgbData,

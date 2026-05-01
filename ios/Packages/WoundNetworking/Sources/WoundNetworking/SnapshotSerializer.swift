@@ -1,4 +1,6 @@
 import Foundation
+import ImageIO
+import CoreGraphics
 import WoundCore
 
 // MARK: - Snapshot Serializer
@@ -12,12 +14,13 @@ public enum SnapshotSerializer {
     public static func serialize(_ scan: WoundScan) throws -> [MultipartPart] {
         var parts = [MultipartPart]()
 
-        // 1. RGB image (JPEG)
+        // 1. RGB image (JPEG, resized to 1920px max for upload)
+        let optimizedRGB = optimizeImageForUpload(scan.captureData.rgbImageData)
         parts.append(MultipartPart(
             name: "rgb_image",
             filename: "rgb.jpg",
             mimeType: "image/jpeg",
-            data: scan.captureData.rgbImageData
+            data: optimizedRGB
         ))
 
         // 2. Depth map (compressed float16)
@@ -101,6 +104,53 @@ public enum SnapshotSerializer {
         ))
 
         return parts
+    }
+
+    // MARK: - Image Optimization
+
+    /// Resize JPEG image to max 1920px on longest side and recompress at 0.75 quality.
+    /// Uses ImageIO for efficient decode-resize-encode without UIKit.
+    /// Falls back to original data if processing fails.
+    public static func optimizeImageForUpload(
+        _ imageData: Data,
+        maxDimension: Int = 1920,
+        quality: Double = 0.75
+    ) -> Data {
+        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil) else {
+            return imageData
+        }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension
+        ]
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return imageData
+        }
+
+        let destData = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            destData,
+            "public.jpeg" as CFString,
+            1,
+            nil
+        ) else {
+            return imageData
+        }
+
+        CGImageDestinationAddImage(
+            dest,
+            cgImage,
+            [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
+        )
+
+        guard CGImageDestinationFinalize(dest) else {
+            return imageData
+        }
+
+        return destData as Data
     }
 
     // MARK: - Float32 → Float16 Compression

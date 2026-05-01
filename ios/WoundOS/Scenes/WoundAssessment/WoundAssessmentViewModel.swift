@@ -179,26 +179,31 @@ final class WoundAssessmentViewModel: ObservableObject {
                 updatedScan.encounterId = encounter.id
                 updatedScan.anatomicalLocation = wound?.anatomicalLocation.displayName
                 try await scanStorage.saveScan(updatedScan)
-                await uploadManager.enqueueUpload(scan: updatedScan)
 
                 CrashLogger.shared.log(
                     "Assessment saved — encounter=\(encounter.id), nurse=\(nurseId), facility=\(facilityId)",
                     category: .storage
                 )
 
-                let uploadMsg = await self.uploadToReplit(
-                    scan: updatedScan,
-                    assessment: assessment,
-                    encounter: encounter,
-                    manualMeasurements: manualMeasurements,
-                    verifiedUser: verifiedUser
-                )
-
                 isSaving = false
                 onAssessmentComplete?(assessment)
 
-                if let msg = uploadMsg {
-                    showToast(msg)
+                Task { [weak self] in
+                    await self?.uploadManager.enqueueUpload(scan: updatedScan)
+                }
+
+                Task { [weak self] in
+                    guard let self else { return }
+                    let uploadMsg = await self.uploadToReplit(
+                        scan: updatedScan,
+                        assessment: assessment,
+                        encounter: encounter,
+                        manualMeasurements: manualMeasurements,
+                        verifiedUser: verifiedUser
+                    )
+                    if let msg = uploadMsg {
+                        await MainActor.run { self.showToast(msg) }
+                    }
                 }
             } catch {
                 self.error = error.localizedDescription
@@ -272,7 +277,8 @@ final class WoundAssessmentViewModel: ObservableObject {
             )
         }
 
-        let rgbBase64 = scan.captureData.rgbImageData.base64EncodedString()
+        let optimizedRGB = SnapshotSerializer.optimizeImageForUpload(scan.captureData.rgbImageData)
+        let rgbBase64 = optimizedRGB.base64EncodedString()
 
         let patientPayload: PatientContextPayload? = patient.map { p in
             let dobFormatter = ISO8601DateFormatter()
@@ -367,8 +373,10 @@ final class WoundAssessmentViewModel: ObservableObject {
         )
 
         do {
+            let originalKB = scan.captureData.rgbImageData.count / 1024
+            let optimizedKB = optimizedRGB.count / 1024
             CrashLogger.shared.log(
-                "Replit upload starting — url=\(baseURL.absoluteString)/api/v1/captures, bodySize=\(rgbBase64.count) chars base64",
+                "Replit upload — rgb \(originalKB)KB→\(optimizedKB)KB, base64=\(rgbBase64.count) chars",
                 category: .network
             )
             let result = try await clinicalPlatformClient.upload(payload: payload, token: token, baseURL: baseURL)

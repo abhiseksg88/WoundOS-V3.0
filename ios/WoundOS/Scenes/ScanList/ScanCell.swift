@@ -144,7 +144,10 @@ final class ScanCell: UITableViewCell {
 
     func configure(with scan: WoundScan) {
         // Thumbnail
-        woundThumbnail.image = UIImage(data: scan.captureData.rgbImageData)
+        if let raw = UIImage(data: scan.captureData.rgbImageData),
+           let cg = raw.cgImage {
+            woundThumbnail.image = UIImage(cgImage: cg, scale: 1.0, orientation: .right)
+        }
 
         // Date
         let formatter = DateFormatter()

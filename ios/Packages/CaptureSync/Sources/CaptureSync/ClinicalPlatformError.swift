@@ -6,6 +6,7 @@ public enum ClinicalPlatformError: Error, Equatable, LocalizedError, Sendable {
     case noVerifiedUser
     case invalidBaseURL(String)
     case unauthorized
+    case invalidCredentials
     case badRequest(String)
     case validationError(String)
     case payloadTooLarge
@@ -26,6 +27,8 @@ public enum ClinicalPlatformError: Error, Equatable, LocalizedError, Sendable {
             return "Invalid API URL: \(url)"
         case .unauthorized:
             return "Invalid or expired token. Please reconfigure in Settings."
+        case .invalidCredentials:
+            return "Invalid CarePlix ID or Passcode. Please try again."
         case .badRequest(let detail):
             return "Upload rejected: \(detail)"
         case .validationError(let detail):
@@ -47,7 +50,7 @@ public enum ClinicalPlatformError: Error, Equatable, LocalizedError, Sendable {
         switch self {
         case .serverError, .networkError:
             return true
-        case .unauthorized, .badRequest, .validationError, .payloadTooLarge,
+        case .unauthorized, .invalidCredentials, .badRequest, .validationError, .payloadTooLarge,
              .noTokenConfigured, .noBaseURLConfigured, .noVerifiedUser,
              .invalidBaseURL, .decodingError, .keychainSaveFailed:
             return false

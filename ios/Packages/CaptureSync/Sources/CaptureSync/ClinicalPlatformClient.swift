@@ -16,6 +16,58 @@ public actor ClinicalPlatformClient {
         self.session = session
     }
 
+    // MARK: - Login with CarePlix ID + Passcode
+
+    public func login(carePlixId: String, passcode: String, baseURL: URL) async throws -> LoginResponse {
+        let url = baseURL.appendingPathComponent("api/v1/auth/login")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+
+        let body: [String: String] = [
+            "careplix_id": carePlixId,
+            "passcode": passcode
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        logDiagnostic("[login] URL: \(url.absoluteString)")
+        logDiagnostic("[login] CarePlix ID: \(carePlixId)")
+
+        let (data, response) = try await performRequest(request)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw ClinicalPlatformError.networkError("Invalid response")
+        }
+
+        logDiagnostic("[login] Status: \(http.statusCode)")
+
+        let bodyString = String(data: data, encoding: .utf8) ?? "(non-UTF8, \(data.count) bytes)"
+        logDiagnostic("[login] Body: \(bodyString.prefix(500))")
+
+        switch http.statusCode {
+        case 200:
+            break
+        case 401:
+            throw ClinicalPlatformError.invalidCredentials
+        case 404:
+            throw ClinicalPlatformError.networkError("Login endpoint not found. Check API Base URL.")
+        case 500...599:
+            throw ClinicalPlatformError.serverError(http.statusCode, "Server error")
+        default:
+            throw ClinicalPlatformError.serverError(http.statusCode, "Unexpected status \(http.statusCode)")
+        }
+
+        do {
+            return try JSONDecoder().decode(LoginResponse.self, from: data)
+        } catch {
+            logDiagnostic("[login] Decode FAILED: \(error)")
+            throw ClinicalPlatformError.decodingError(
+                "\(error.localizedDescription). Raw: \(bodyString.prefix(200))"
+            )
+        }
+    }
+
     // MARK: - Verify Token
 
     public func verify(token: String, baseURL: URL) async throws -> VerifiedUser {

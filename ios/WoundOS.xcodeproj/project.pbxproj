@@ -26,6 +26,8 @@
 		248134752F9F004B004B375A /* WoundAssessmentViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134742F9F004B004B375A /* WoundAssessmentViewModel.swift */; };
 		248134772F9F0085004B375A /* WoundAssessmentViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134762F9F0085004B375A /* WoundAssessmentViewController.swift */; };
 		248134792F9F00A5004B375A /* PostScanAssignmentViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 248134782F9F00A5004B375A /* PostScanAssignmentViewController.swift */; };
+		2481347E2FA30621004B375A /* LoginViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481347D2FA30621004B375A /* LoginViewController.swift */; };
+		248134802FA3216D004B375A /* OnboardingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2481347F2FA3216D004B375A /* OnboardingViewController.swift */; };
 		249019E32F98790D006CFC7B /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019E22F98790D006CFC7B /* FeatureFlags.swift */; };
 		249019E62F9879E9006CFC7B /* V5CaptureViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019E52F9879E9006CFC7B /* V5CaptureViewModel.swift */; };
 		249019E82F9879F7006CFC7B /* V5CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 249019E72F9879F7006CFC7B /* V5CaptureView.swift */; };
@@ -97,6 +99,8 @@
 		248134742F9F004B004B375A /* WoundAssessmentViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WoundAssessmentViewModel.swift; sourceTree = "<group>"; };
 		248134762F9F0085004B375A /* WoundAssessmentViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WoundAssessmentViewController.swift; sourceTree = "<group>"; };
 		248134782F9F00A5004B375A /* PostScanAssignmentViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostScanAssignmentViewController.swift; sourceTree = "<group>"; };
+		2481347D2FA30621004B375A /* LoginViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewController.swift; sourceTree = "<group>"; };
+		2481347F2FA3216D004B375A /* OnboardingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViewController.swift; sourceTree = "<group>"; };
 		249019E22F98790D006CFC7B /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
 		249019E52F9879E9006CFC7B /* V5CaptureViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V5CaptureViewModel.swift; sourceTree = "<group>"; };
 		249019E72F9879F7006CFC7B /* V5CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V5CaptureView.swift; sourceTree = "<group>"; };
@@ -216,6 +220,15 @@
 				248134782F9F00A5004B375A /* PostScanAssignmentViewController.swift */,
 			);
 			path = PostScanAssignment;
+			sourceTree = "<group>";
+		};
+		2481347C2FA30601004B375A /* Login */ = {
+			isa = PBXGroup;
+			children = (
+				2481347D2FA30621004B375A /* LoginViewController.swift */,
+				2481347F2FA3216D004B375A /* OnboardingViewController.swift */,
+			);
+			path = Login;
 			sourceTree = "<group>";
 		};
 		249019E42F9879D4006CFC7B /* V5Capture */ = {
@@ -339,6 +352,7 @@
 				248134572F9DF084004B375A /* Dashboard */,
 				248134722F9F0036004B375A /* WoundAssessment */,
 				248134732F9F0037004B375A /* PostScanAssignment */,
+				2481347C2FA30601004B375A /* Login */,
 			);
 			path = Scenes;
 			sourceTree = "<group>";
@@ -454,7 +468,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					EEEE00000000000000000001 = {
 						CreatedOnToolsVersion = 15.0;
@@ -510,6 +524,7 @@
 				BBBB00000000000000000001 /* AppDelegate.swift in Sources */,
 				BBBB00000000000000000002 /* DependencyContainer.swift in Sources */,
 				249019EA2F987A10006CFC7B /* ARViewRepresentable.swift in Sources */,
+				248134802FA3216D004B375A /* OnboardingViewController.swift in Sources */,
 				248134632F9DF0DC004B375A /* WoundSummaryCell.swift in Sources */,
 				BBBB00000000000000000003 /* SceneDelegate.swift in Sources */,
 				BBBB00000000000000000004 /* AppCoordinator.swift in Sources */,
@@ -554,6 +569,7 @@
 				BBBB00000000000000000015 /* ScanDetailViewModel.swift in Sources */,
 				BBBB00000000000000000016 /* ScanCell.swift in Sources */,
 				249019F22F987A20006CFC7B /* CaptureButtonView.swift in Sources */,
+				2481347E2FA30621004B375A /* LoginViewController.swift in Sources */,
 				249019F02F987A12006CFC7B /* ConfidenceHeatmapOverlay.swift in Sources */,
 				BBBB00000000000000000017 /* ScanListViewController.swift in Sources */,
 				24901A062F99CE82006CFC7B /* DeveloperMode.swift in Sources */,
@@ -577,8 +593,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 45;
-				DEVELOPMENT_TEAM = 829CPR87G4;
+				CURRENT_PROJECT_VERSION = 51;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -605,8 +620,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS = NO;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 45;
-				DEVELOPMENT_TEAM = 829CPR87G4;
+				CURRENT_PROJECT_VERSION = 51;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = WoundOS/Resources/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -663,6 +677,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 829CPR87G4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -686,6 +701,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -727,6 +743,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 829CPR87G4;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -743,6 +760,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};

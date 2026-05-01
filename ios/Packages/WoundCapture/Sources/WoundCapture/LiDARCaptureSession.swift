@@ -108,9 +108,10 @@ public final class LiDARCaptureSession: NSObject, CaptureProviderProtocol {
             .filter({ $0.captureDevicePosition == .back })
             .max(by: { $0.imageResolution.width < $1.imageResolution.width }) {
             config.videoFormat = hiResFormat
+            logger.info("V5 selected hi-res format: \(hiResFormat.imageResolution.width)x\(hiResFormat.imageResolution.height)")
         }
 
-        logger.info("V5 AR config: sceneReconstruction=mesh, frameSemantics=smoothedSceneDepth")
+        logger.info("V5 AR config: sceneReconstruction=mesh, frameSemantics=smoothedSceneDepth, format=\(config.videoFormat.imageResolution.width)x\(config.videoFormat.imageResolution.height)")
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
         #endif
 
@@ -140,6 +141,7 @@ public final class LiDARCaptureSession: NSObject, CaptureProviderProtocol {
             .filter({ $0.captureDevicePosition == .back })
             .max(by: { $0.imageResolution.width < $1.imageResolution.width }) {
             config.videoFormat = hiResFormat
+            logger.info("V5 resume hi-res format: \(hiResFormat.imageResolution.width)x\(hiResFormat.imageResolution.height)")
         }
 
         // No reset options — preserves world map, just restarts frame delivery
@@ -185,7 +187,9 @@ public final class LiDARCaptureSession: NSObject, CaptureProviderProtocol {
             throw CaptureError.noMeshData
         }
 
+        let intrinsics = frame.camera.intrinsics
         logger.info("V5 capture: \(imageWidth)x\(imageHeight), \(vertices.count) verts, \(faces.count) faces")
+        logger.info("V5 intrinsics: fx=\(intrinsics[0][0]) fy=\(intrinsics[1][1]) cx=\(intrinsics[2][0]) cy=\(intrinsics[2][1]) | cx/halfW=\(String(format: "%.3f", intrinsics[2][0] / Float(imageWidth) * 2.0))")
 
         return CaptureSnapshot(
             rgbImageData: rgbData,

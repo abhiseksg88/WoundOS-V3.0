@@ -45,6 +45,30 @@ struct AuthVerifyResponse: Decodable {
     }
 }
 
+public struct LoginResponse: Decodable, Sendable {
+    public let token: String
+    public let user: LoginUser
+
+    public struct LoginUser: Decodable, Sendable {
+        public let id: String
+        public let name: String
+        public let email: String
+        public let role: String
+        public let facilityId: String
+        public let careplixId: String
+
+        enum CodingKeys: String, CodingKey {
+            case id, name, email, role
+            case facilityId = "facility_id"
+            case careplixId = "careplix_id"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case token, user
+    }
+}
+
 struct CaptureUploadResponse: Decodable {
     let captureId: String
     let webUrl: String

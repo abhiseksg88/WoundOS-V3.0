@@ -1,10 +1,12 @@
 import UIKit
 import ARKit
+import CaptureSync
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
     private var appCoordinator: AppCoordinator?
+    private var container: DependencyContainer?
 
     func scene(
         _ scene: UIScene,
@@ -17,11 +19,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
 
-        // Configure feature flags
         let container = DependencyContainer()
+        self.container = container
         FeatureFlags.configure(store: container.featureFlagStore)
 
-        // UI test / smoke test launch arguments
         if ProcessInfo.processInfo.arguments.contains("--enable-v5-lidar-capture") {
             FeatureFlags.setEnabled(.v5LidarCapture, true)
         }
@@ -33,19 +34,53 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
 
         let window = UIWindow(windowScene: windowScene)
-        CrashLogger.shared.log("DependencyContainer created", category: .app)
-        let navigationController = UINavigationController()
+        self.window = window
 
+        if container.clinicalPlatformKeychain.loadToken() != nil,
+           container.clinicalPlatformKeychain.loadVerifiedUser() != nil {
+            CrashLogger.shared.log("Existing session found — launching main app", category: .app)
+            showMainApp(container: container, in: window)
+        } else {
+            CrashLogger.shared.log("No session — showing login", category: .app)
+            showLogin(container: container, in: window)
+        }
+
+        window.makeKeyAndVisible()
+        observeLogout()
+        CrashLogger.shared.log("Scene setup complete, window visible", category: .app)
+    }
+
+    // MARK: - Root Transitions
+
+    func showMainApp(container: DependencyContainer, in window: UIWindow) {
+        let navigationController = UINavigationController()
         appCoordinator = AppCoordinator(
             navigationController: navigationController,
             dependencies: container
         )
         appCoordinator?.start()
-
         window.rootViewController = navigationController
-        window.makeKeyAndVisible()
-        self.window = window
-        CrashLogger.shared.log("Scene setup complete, window visible", category: .app)
+    }
+
+    func showLogin(container: DependencyContainer, in window: UIWindow) {
+        let loginVC = LoginViewController(
+            keychain: container.clinicalPlatformKeychain,
+            client: container.clinicalPlatformClient
+        )
+        loginVC.delegate = self
+        window.rootViewController = loginVC
+    }
+
+    func logout() {
+        guard let container, let window else { return }
+        CrashLogger.shared.log("Logout — clearing session", category: .app)
+        container.clinicalPlatformKeychain.deleteToken()
+        container.clinicalPlatformKeychain.deleteVerifiedUser()
+        appCoordinator = nil
+
+        UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
+            self.showLogin(container: container, in: window)
+        }
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
@@ -58,6 +93,21 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidEnterBackground(_ scene: UIScene) {
         CrashLogger.shared.log("Scene entered background", category: .app)
+    }
+
+    // MARK: - Logout Notification
+
+    private func observeLogout() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleLogoutNotification),
+            name: .carePlixLogout,
+            object: nil
+        )
+    }
+
+    @objc private func handleLogoutNotification() {
+        logout()
     }
 
     private static func printV5LaunchBanner() {
@@ -85,4 +135,50 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         ================================================================
         """)
     }
+}
+
+// MARK: - LoginViewControllerDelegate
+
+extension SceneDelegate: LoginViewControllerDelegate {
+    func loginDidSucceed(user: VerifiedUser) {
+        guard let container, let window else { return }
+        CrashLogger.shared.log("Login succeeded — checking onboarding", category: .app)
+
+        let onboardingKey = "onboarding_completed_\(user.userId)"
+        if UserDefaults.standard.bool(forKey: onboardingKey) {
+            UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
+                self.showMainApp(container: container, in: window)
+            }
+        } else {
+            let onboarding = OnboardingViewController(userName: user.name)
+            onboarding.delegate = self
+            UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
+                window.rootViewController = onboarding
+            }
+        }
+    }
+}
+
+// MARK: - OnboardingViewControllerDelegate
+
+extension SceneDelegate: OnboardingViewControllerDelegate {
+    func onboardingDidComplete() {
+        guard let container, let window else { return }
+
+        if let user = container.clinicalPlatformKeychain.loadVerifiedUser() {
+            let onboardingKey = "onboarding_completed_\(user.userId)"
+            UserDefaults.standard.set(true, forKey: onboardingKey)
+        }
+
+        CrashLogger.shared.log("Onboarding complete — launching main app", category: .app)
+        UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
+            self.showMainApp(container: container, in: window)
+        }
+    }
+}
+
+// MARK: - Logout Notification
+
+extension Notification.Name {
+    static let carePlixLogout = Notification.Name("com.careplix.logout")
 }

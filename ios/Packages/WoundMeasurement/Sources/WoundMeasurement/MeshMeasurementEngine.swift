@@ -70,6 +70,8 @@ public final class MeshMeasurementEngine {
         let startTime = CFAbsoluteTimeGetCurrent()
         logger.info("computeMeasurements: boundary2D=\(boundary.points2D.count), boundary3D=\(boundary.projectedPoints3D?.count ?? 0)")
 
+        let effectiveIntrinsics = Self.validateIntrinsics(cameraIntrinsics, imageWidth: imageWidth, imageHeight: imageHeight)
+
         guard let points3D = boundary.projectedPoints3D, points3D.count >= 3 else {
             logger.error("Insufficient 3D boundary points: \(boundary.projectedPoints3D?.count ?? 0)")
             throw MeasurementError.insufficientBoundaryPoints(
@@ -99,7 +101,7 @@ public final class MeshMeasurementEngine {
             vertices: vertices,
             faces: faces,
             boundary2D: orderedBoundary2D,
-            intrinsics: cameraIntrinsics,
+            intrinsics: effectiveIntrinsics,
             cameraTransform: cameraTransform,
             imageWidth: imageWidth,
             imageHeight: imageHeight
@@ -225,6 +227,40 @@ public final class MeshMeasurementEngine {
             computedOnDevice: true,
             processingTimeMs: processingTimeMs
         )
+    }
+
+    // MARK: - Intrinsics Validation
+
+    /// Detect intrinsics/resolution mismatches for the MeshClipper projection.
+    /// Same logic as BoundaryProjector's validation — ensures consistent
+    /// 3D→2D projection for mesh clipping.
+    private static func validateIntrinsics(
+        _ intrinsics: simd_float3x3,
+        imageWidth: Int,
+        imageHeight: Int
+    ) -> simd_float3x3 {
+        let fx = intrinsics[0][0]
+        let fy = intrinsics[1][1]
+        let cx = intrinsics[2][0]
+        let cy = intrinsics[2][1]
+
+        let halfW = Float(imageWidth) / 2.0
+        let halfH = Float(imageHeight) / 2.0
+
+        let ratioX = cx / halfW
+        let ratioY = cy / halfH
+
+        if ratioX > 1.8 || ratioX < 0.55 || ratioY > 1.8 || ratioY < 0.55 {
+            let scale = halfW / cx
+            logger.warning("INTRINSICS MISMATCH in MeshMeasurementEngine: cx=\(cx) vs halfW=\(halfW), scale=\(scale)")
+            return simd_float3x3(
+                SIMD3<Float>(fx * scale, 0, 0),
+                SIMD3<Float>(0, fy * scale, 0),
+                SIMD3<Float>(cx * scale, cy * scale, 1)
+            )
+        }
+
+        return intrinsics
     }
 
     // MARK: - Helpers

@@ -90,7 +90,11 @@ final class ScanDetailViewController: UIViewController {
             widthEndpoints: nil,
             lengthText: nil,
             widthText: nil,
-            image: UIImage(data: scan.captureData.rgbImageData)
+            image: {
+                guard let raw = UIImage(data: scan.captureData.rgbImageData),
+                      let cg = raw.cgImage else { return nil }
+                return UIImage(cgImage: cg, scale: 1.0, orientation: .right)
+            }()
         ))
 
         let imageContainer = UIView()

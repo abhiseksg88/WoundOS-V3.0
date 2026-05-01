@@ -23,12 +23,14 @@ final class SettingsViewController: UIViewController {
     // MARK: - Data
 
     private enum Section: Int, CaseIterable {
+        case account
         case clinical
+        case diagnostics
         case developer
     }
 
     private var sections: [Section] {
-        var s: [Section] = [.clinical]
+        var s: [Section] = [.account, .clinical, .diagnostics]
         if DeveloperMode.isEnabled {
             s.append(.developer)
         }
@@ -87,12 +89,17 @@ extension SettingsViewController: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        1
+        switch sections[section] {
+        case .account: return 2
+        default: return 1
+        }
     }
 
     func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         switch sections[section] {
+        case .account: return "ACCOUNT"
         case .clinical: return "SYNC"
+        case .diagnostics: return "DIAGNOSTICS"
         case .developer: return "DEVELOPER"
         }
     }
@@ -100,8 +107,30 @@ extension SettingsViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "SettingsCell", for: indexPath)
         var content = cell.defaultContentConfiguration()
+        cell.accessoryType = .disclosureIndicator
 
         switch sections[indexPath.section] {
+        case .account:
+            if indexPath.row == 0 {
+                content.image = UIImage(systemName: "person.circle.fill")
+                content.imageProperties.tintColor = WOColors.primaryGreen
+                if let user = keychain.loadVerifiedUser() {
+                    content.text = user.name
+                    content.secondaryText = "\(user.role) • \(user.tokenLabel ?? user.userId)"
+                    content.secondaryTextProperties.color = WOColors.secondaryText
+                } else {
+                    content.text = "Not signed in"
+                    content.secondaryTextProperties.color = WOColors.tertiaryText
+                }
+                cell.accessoryType = .none
+            } else {
+                content.image = UIImage(systemName: "rectangle.portrait.and.arrow.right")
+                content.imageProperties.tintColor = WOColors.flagRed
+                content.text = "Sign Out"
+                content.textProperties.color = WOColors.flagRed
+                cell.accessoryType = .none
+            }
+
         case .clinical:
             content.image = UIImage(systemName: "arrow.up.doc")
             content.imageProperties.tintColor = WOColors.primaryGreen
@@ -115,6 +144,13 @@ extension SettingsViewController: UITableViewDataSource {
                 content.secondaryTextProperties.color = WOColors.tertiaryText
             }
 
+        case .diagnostics:
+            content.image = UIImage(systemName: "ladybug")
+            content.imageProperties.tintColor = WOColors.warningOrange
+            content.text = "Share Debug Logs"
+            content.secondaryText = "Export crash & diagnostic logs"
+            content.secondaryTextProperties.color = WOColors.tertiaryText
+
         case .developer:
             content.image = UIImage(systemName: "wrench.and.screwdriver")
             content.imageProperties.tintColor = WOColors.warningOrange
@@ -124,7 +160,6 @@ extension SettingsViewController: UITableViewDataSource {
         }
 
         cell.contentConfiguration = content
-        cell.accessoryType = .disclosureIndicator
         cell.backgroundColor = WOColors.cardBackground
         return cell
     }
@@ -138,10 +173,57 @@ extension SettingsViewController: UITableViewDelegate {
         tableView.deselectRow(at: indexPath, animated: true)
 
         switch sections[indexPath.section] {
+        case .account:
+            if indexPath.row == 1 {
+                confirmSignOut()
+            }
         case .clinical:
             onClinicalPlatformTapped?()
+        case .diagnostics:
+            showDiagnosticsMenu()
         case .developer:
             onDeveloperToolsTapped?()
         }
+    }
+
+    private func showDiagnosticsMenu() {
+        let alert = UIAlertController(title: "Debug Logs", message: "Export crash & diagnostic logs for debugging.", preferredStyle: .actionSheet)
+
+        alert.addAction(UIAlertAction(title: "Share Log Files", style: .default) { [weak self] _ in
+            let urls = CrashLogger.shared.logFileURLs()
+            guard !urls.isEmpty else {
+                let empty = UIAlertController(title: "No Logs", message: "No log files found.", preferredStyle: .alert)
+                empty.addAction(UIAlertAction(title: "OK", style: .default))
+                self?.present(empty, animated: true)
+                return
+            }
+            let activityVC = UIActivityViewController(activityItems: urls, applicationActivities: nil)
+            self?.present(activityVC, animated: true)
+        })
+
+        alert.addAction(UIAlertAction(title: "Copy Logs to Clipboard", style: .default) { _ in
+            let logText = CrashLogger.shared.exportLogs()
+            UIPasteboard.general.string = logText
+        })
+
+        alert.addAction(UIAlertAction(title: "Clear All Logs", style: .destructive) { _ in
+            CrashLogger.shared.clearLogs()
+        })
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alert, animated: true)
+    }
+
+    private func confirmSignOut() {
+        let alert = UIAlertController(
+            title: "Sign Out",
+            message: "Are you sure you want to sign out? You will need your CarePlix ID and Passcode to sign back in.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Sign Out", style: .destructive) { _ in
+            NotificationCenter.default.post(name: .carePlixLogout, object: nil)
+        })
+        present(alert, animated: true)
     }
 }
