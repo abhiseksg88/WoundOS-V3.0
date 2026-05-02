@@ -109,6 +109,14 @@ final class AppCoordinator: Coordinator {
             navigationController: captureNav,
             dependencies: dependencies
         )
+        captureCoordinator.onFlowComplete = { [weak captureCoordinator] in
+            guard let nav = captureCoordinator?.navigationController else { return }
+            nav.popToRootViewController(animated: false)
+            if let tabBar = nav.tabBarController {
+                tabBar.selectedIndex = 0
+            }
+            captureCoordinator?.start()
+        }
         addChild(captureCoordinator)
         captureCoordinator.start()
 

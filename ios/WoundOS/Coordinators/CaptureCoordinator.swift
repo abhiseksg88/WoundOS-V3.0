@@ -169,8 +169,8 @@ final class CaptureCoordinator: Coordinator {
         )
 
         viewModel.onSaveComplete = { [weak self] in
-            CrashLogger.shared.log("Save complete — returning to Capture", category: .coordinator)
-            self?.showCapture()
+            CrashLogger.shared.log("Save complete — returning to Home", category: .coordinator)
+            self?.finishFlow()
         }
 
         viewModel.onContinueToAssessment = { [weak self, weak viewModel] in
